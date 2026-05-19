@@ -102,15 +102,7 @@ jobs:
                 sudo mv /tmp/larahealth_storage_backup "$BASE_DIR/storage/app/public"
             fi
 
-            # 6. AJUSTE PRELIMINAR DE PERMISSÕES (Isso resolve o erro do deploy)
-            # Garante que o usuário que roda o deploy consiga escrever no storage imediatamente
-            echo "🔒 Aplicando permissões iniciais para execução do Artisan..."
-            sudo chown -R www-data:www-data "$BASE_DIR"
-            sudo chmod -R 775 "$BASE_DIR/storage" "$BASE_DIR/bootstrap/cache"
-            
-            # Adiciona o usuário do terminal (ubuntu) ao grupo do Nginx temporariamente se necessário,
-            # ou executa os comandos do artisan com o dono correto do projeto.
-            
+            # 6. Executa as Migrações de Banco de Dados e os Links de Storage no Servidor Real
             echo "⚙️ Executando migrações e rotinas do Laravel..."
             cd "$BASE_DIR"
             
@@ -119,17 +111,16 @@ jobs:
             sudo -u www-data php artisan route:clear
             sudo -u www-data php artisan view:clear
 
-            # Executa as migrações e seeders usando o usuário do Nginx para não quebrar permissões
+            # Executa as migrações e seeders usando o usuário do Nginx
             sudo -u www-data php artisan migrate --force
             sudo -u www-data php artisan db:seed --force
 
             # Recria o link simbólico público do storage
             sudo -u www-data php artisan storage:link
 
-            # Otimiza o Laravel gerando os novos caches com o dono correto
-            sudo -u www-data php artisan config:cache
-            sudo -u www-data php artisan route:cache
-            sudo -u www-data php artisan view:cache
+            # CORREÇÃO: Removemos o view:cache, mantendo apenas o essencial para APIs
+            php artisan config:cache
+            php artisan route:cache
 
             # 7. Ajustar permissões finais de segurança para o Nginx
             echo "🔒 Alinhando permissões finais de segurança..."
