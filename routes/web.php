@@ -12,7 +12,12 @@ use Illuminate\Support\Facades\Route;
 |
 */
 
-// Catch-all route for the SPA - renders the Vue app for all non-API routes
-Route::get('/{any?}', function () {
-    return view('welcome');
-})->where('any', '.*');
+Route::get('/', function () {
+    return response()->json([
+        'app' => 'LaraHealth API',
+        'status' => 'online',
+        'version' => '1.0.0',
+        'environment' => app()->environment(),
+        'timestamp' => now()->toIso8601String()
+    ]);
+});
