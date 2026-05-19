@@ -1,5 +1,6 @@
 <?php
 
+use App\Http\Controllers\SpaController;
 use Illuminate\Support\Facades\Route;
 
 /*
@@ -12,12 +13,6 @@ use Illuminate\Support\Facades\Route;
 |
 */
 
-Route::get('/', function () {
-    return response()->json([
-        'app' => 'LaraHealth API',
-        'status' => 'online',
-        'version' => '1.0.0',
-        'environment' => app()->environment(),
-        'timestamp' => now()->toIso8601String()
-    ]);
-});
+// Catch-all route for the SPA - renders the Vue app for all non-API routes
+// Using a controller instead of a closure to allow route:cache to work in production
+Route::get('/{any?}', [SpaController::class, 'index'])->where('any', '.*');
