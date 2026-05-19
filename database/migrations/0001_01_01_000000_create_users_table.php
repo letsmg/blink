@@ -1,5 +1,6 @@
 <?php
 
+use App\Enums\UserRole;
 use Illuminate\Database\Migrations\Migration;
 use Illuminate\Database\Schema\Blueprint;
 use Illuminate\Support\Facades\Schema;
@@ -8,6 +9,7 @@ return new class extends Migration
 {
     /**
      * Run the migrations.
+     * Creates users table with role enum, terms acceptance, and Argon2id password hashing.
      */
     public function up(): void
     {
@@ -16,7 +18,10 @@ return new class extends Migration
             $table->string('name');
             $table->string('email')->unique();
             $table->timestamp('email_verified_at')->nullable();
-            $table->string('password');
+            $table->string('password'); // Argon2id hashed via Laravel's 'hashed' cast
+            $table->tinyInteger('role')->default(UserRole::Patient->value); // 0=Patient, 1=Admin, 2=Operational
+            $table->boolean('terms_accepted')->default(false); // GDPR/Terms acceptance flag
+            $table->timestamp('terms_accepted_at')->nullable(); // When the user accepted the terms
             $table->rememberToken();
             $table->timestamps();
         });
