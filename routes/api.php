@@ -1,5 +1,6 @@
 <?php
 
+use App\Http\Controllers\Api\AppointmentController;
 use App\Http\Controllers\Api\AuthController;
 use App\Http\Controllers\Api\MessageController;
 use App\Http\Controllers\Api\PatientController;
@@ -75,19 +76,18 @@ Route::middleware('auth:sanctum')->group(function () {
             Route::prefix('appointments')->group(function () {
                 Route::get('/', [AppointmentController::class, 'index']);
                 Route::post('/', [AppointmentController::class, 'store']);
-                Route::get('/{appointment}', [AppointmentController::class, 'show']);
-                Route::put('/{appointment}', [AppointmentController::class, 'update']);
-                Route::delete('/{appointment}', [AppointmentController::class, 'destroy']);
+                Route::get('/pending-count', [AppointmentController::class, 'pendingCount']);
+                Route::get('/all-unavailable-dates', [AppointmentController::class, 'allUnavailableDates']);
                 Route::get('/search/patients', [AppointmentController::class, 'searchPatients']);
                 Route::get('/search/professionals', [AppointmentController::class, 'searchProfessionals']);
                 Route::get('/professionals/{professional}/unavailable-dates', [AppointmentController::class, 'unavailableDates']);
+                Route::get('/{appointment}', [AppointmentController::class, 'show']);
+                Route::put('/{appointment}', [AppointmentController::class, 'update']);
+                Route::delete('/{appointment}', [AppointmentController::class, 'destroy']);
             });
 
             // Professionals list
             Route::get('/professionals', [ProfessionalController::class, 'index']);
-
-            // All unavailability dates across all professionals (for calendar overview)
-            Route::get('/appointments/all-unavailable-dates', [AppointmentController::class, 'allUnavailableDates']);
 
             // Professional unavailability periods
             Route::prefix('professionals/{professional}/unavailability')->group(function () {
