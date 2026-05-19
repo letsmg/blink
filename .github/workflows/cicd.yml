@@ -1,4 +1,4 @@
-name: 🚀 Deploy larahealth (Direto)
+name: 🚀 Deploy LaraHealth (Direto p/ Produção)
 
 on:
   push:
@@ -11,14 +11,15 @@ jobs:
       - name: 📥 Checkout code
         uses: actions/checkout@v4
 
-      - name: 🐘 Configurar PHP (Para ferramentas locais no Runner)
+      - name: 🐘 Configurar PHP (Para ferramentas no Runner)
         uses: shivammathur/setup-php@v2
         with:
           php-version: '8.3'
-          extensions: mbstring, xml, ctype, iconv, mysql, pgsql
+          extensions: mbstring, xml, ctype, iconv, pgsql, pdo_pgsql
 
-      - name: 📦 Instalar dependências do Composer no Runner
-        run: composer install --no-interaction --prefer-dist
+      - name: 📦 Instalar dependências do Composer (Modo Produção)
+        run: |
+          composer install --no-dev --optimize-autoloader --no-interaction --prefer-dist
 
       - name: 🟢 Configurar Node.js (Para os assets/frontend)
         uses: actions/setup-node@v4
@@ -26,114 +27,120 @@ jobs:
           node-version: 20
           cache: 'npm'
 
-      - name: 📦 Instalar dependências do Node e Rodar Builds do Frontend
+      - name: 📦 Instalar dependências do Node e Rodar Builds do Vite
         run: |
           npm ci
           npm run build
 
-      - name: 🤐 Criar Pacote de Deploy Estruturado
+      - name: 🤐 Criar Pacote de Deploy Compactado (Pronto para Uso)
         run: |
           mkdir build-tmp
-          # Copia as pastas estruturais necessárias (resources NÃO vai para produção)
-          cp -r app config db public storage build-tmp/
-          # Copia arquivos vitais de configuração da raiz
-          cp composer.json composer.lock phinx.php package.json build-tmp/ 2>/dev/null || true
           
-          # Copia o .env.production como .env para produção
+          # Copia apenas as pastas cruciais do Laravel para produção (resources e node_modules NÃO vão)
+          # Inclui a pasta vendor já pronta e otimizada pelo Runner
+          cp -r app config database public storage vendor build-tmp/
+          
+          # Copia os arquivos de configuração vitais da raiz do projeto
+          cp bootstrap/app.php build-tmp/bootstrap/ 2>/dev/null || cp -r bootstrap build-tmp/
+          cp artisan composer.json package.json build-tmp/
+          
+          # Copia o .env.production como o .env oficial de produção
           cp .env.production build-tmp/.env 2>/dev/null || true
           
-          # Remove arquivos de desenvolvimento que não devem ir para produção
+          # Remove o link de desenvolvimento gerado localmente (evita conflito no servidor)
+          rm -f build-tmp/public/storage
           rm -f build-tmp/public/hot
+          
+          # Compacta o pacote limpo
           cd build-tmp
           zip -r ../deploy-larahealth.zip .
           cd ..
 
-      - name: 🔑 Configure SSH
+      - name: 🔑 Configurar Chave SSH
         uses: shimataro/ssh-key-action@v2
         with:
           key: ${{ secrets.SSH_PRIVATE_KEY }}
           known_hosts: ${{ secrets.SSH_KNOWN_HOSTS }}
 
-      - name: 🚀 Executar Deploy e Comandos no Servidor
+      - name: 🚀 Transferir Pacote e Executar Comandos no Servidor
         run: |
           SERVER_IP="${{ secrets.SERVER_IP }}"
 
+          # Envia o arquivo zip direto para a pasta tmp do servidor via SCP
           scp -o StrictHostKeyChecking=no deploy-larahealth.zip ubuntu@$SERVER_IP:/tmp/
 
+          # Abre a conexão SSH para atualizar a pasta de produção
           ssh -o StrictHostKeyChecking=no ubuntu@$SERVER_IP << 'EOF'
             set -e
 
             BASE_DIR="/var/www/larahealth"
 
-            # 1. Garante que o unzip está instalado
+            # 1. Garante que o unzip está instalado no servidor
             if ! command -v unzip &> /dev/null; then
                 echo "📦 Instalando unzip..."
                 sudo apt-get update -y && sudo apt-get install unzip -y
             fi
 
-            # 2. Cria estrutura de pastas e protege uploads existentes
+            # 2. Cria a estrutura base caso não exista
             sudo mkdir -p "$BASE_DIR"
-            sudo mkdir -p "$BASE_DIR/storage/imgs"
-            
-            if [ -d "$BASE_DIR/storage/imgs" ]; then
-                sudo mv "$BASE_DIR/storage/imgs" /tmp/storage_imgs_backup
+
+            # 3. Preserva a pasta de uploads do Storage real para não apagar fotos de pacientes
+            if [ -d "$BASE_DIR/storage/app/public" ]; then
+                echo "📸 Fazendo backup temporário dos uploads públicos..."
+                sudo mv "$BASE_DIR/storage/app/public" /tmp/larahealth_storage_backup
             fi
 
-            echo "🧹 Limpando diretório antigo..."
+            echo "🧹 Limpando arquivos antigos do servidor..."
             sudo rm -rf "${BASE_DIR:?}"/*
 
-            sudo mkdir -p "$BASE_DIR/storage"
-            if [ -d "/tmp/storage_imgs_backup" ]; then
-                sudo mv /tmp/storage_imgs_backup "$BASE_DIR/storage/imgs"
-            fi
-
-            # 3. Descompacta o novo pacote
-            echo "📂 Descompactando novo pacote..."
+            # 4. Descompacta o novo pacote direto na pasta do site
+            echo "📂 Descompactando novo pacote de deploy..."
             sudo unzip -o /tmp/deploy-larahealth.zip -d "$BASE_DIR"
 
-            # 4. Instalação das dependências do Composer em Produção
-            echo "📦 Instalando dependências do Composer..."
-            cd "$BASE_DIR"
-            if [ -f "composer.json" ]; then
-                if ! command -v composer &> /dev/null; then
-                    curl -sS https://getcomposer.org/installer | php
-                    sudo mv composer.phar /usr/local/bin/composer
-                fi
-
-                sudo COMPOSER_ALLOW_SUPERUSER=1 COMPOSER_HOME=/tmp/.composer composer install \
-                    --no-dev \
-                    --optimize-autoloader \
-                    --no-interaction \
-                    --prefer-dist
+            # 5. Restaura a pasta de uploads preservada
+            if [ -d "/tmp/larahealth_storage_backup" ]; then
+                echo "📸 Restaurando uploads públicos..."
+                sudo rm -rf "$BASE_DIR/storage/app/public"
+                sudo mv /tmp/larahealth_storage_backup "$BASE_DIR/storage/app/public"
             fi
 
-            # 5. Executa as Migrações de Banco de Dados e os Links de Storage no Servidor Real
-            echo "⚙️ Executando migrações de banco no servidor..."
-            php vendor/bin/phinx rollback -e development -t 0
-            php vendor/bin/phinx migrate -e development
-            php db/seeders/run_seeds.php
-
-            echo "🔗 Atualizando links simbólicos..."
-            # Remove o link antigo ou pasta antiga se existirem (evita duplicação)
-            sudo rm -f "$BASE_DIR/public/imgs"
+            # 6. Executa comandos internos do Laravel Artisan
+            echo "⚙️ Executando migrações e rotinas do Laravel..."
+            cd "$BASE_DIR"
             
-            # Cria o link simbólico direto pelo terminal do Linux (muito mais seguro que via PHP)
-            sudo ln -s ../storage/imgs "$BASE_DIR/public/imgs"
-            echo "Link criado: public/imgs -> storage/imgs"
+            # Limpa qualquer cache de rota/configuração antigo
+            php artisan config:clear
+            php artisan route:clear
+            php artisan view:clear
 
-            # 6. Ajustar permissões finais para o Nginx
-            echo "🔒 Ajustando permissões para www-data..."
+            # Executa as migrações (forçando em ambiente de produção) e os seeders
+            php artisan migrate --force
+            php artisan db:seed --force
+
+            # Recria o link simbólico público correto do storage do Laravel
+            php artisan storage:link
+
+            # Otimiza o Laravel cacheando as novas configurações para dar performance
+            php artisan config:cache
+            php artisan route:cache
+            php artisan view:cache
+
+            # 7. Ajusta as permissões de arquivos para o Nginx (www-data) ler corretamente
+            echo "🔒 Ajustando permissões de pasta para o Nginx..."
             sudo chown -R www-data:www-data "$BASE_DIR"
             sudo find "$BASE_DIR" -type d -exec chmod 755 {} \;
             sudo find "$BASE_DIR" -type f -exec chmod 644 {} \;
-
-            # 7. Limpeza
-            rm -f /tmp/deploy-larahealth.zip
-            sudo rm -rf /tmp/storage_imgs_backup
             
-            echo "✅ Deploy larahealth Finalizado com sucesso!"
+            # Garante escrita explícita nas pastas de logs e cache
+            sudo chmod -R 775 "$BASE_DIR/storage" "$BASE_DIR/bootstrap/cache"
+
+            # 8. Limpeza de arquivos temporários do servidor
+            rm -f /tmp/deploy-larahealth.zip
+            sudo rm -rf /tmp/larahealth_storage_backup
+            
+            echo "✅ Deploy de LaraHealth finalizado com sucesso absoluto!"
           EOF
 
-      - name: 🧹 Cleanup Runner
+      - name: 🧹 Limpar Runner do GitHub
         if: always()
         run: rm -rf build-tmp deploy-larahealth.zip
