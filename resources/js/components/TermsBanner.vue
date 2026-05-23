@@ -161,9 +161,11 @@ async function acceptTerms() {
 
     // Fecha o modal imediatamente após aceitar
     show.value = false
-  } catch {
+  } catch (err) {
     // Se falhar, mantém o modal visível
+    console.error('Erro ao aceitar termos:', err)
   } finally {
+
     loading.value = false
   }
 }

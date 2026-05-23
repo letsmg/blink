@@ -31,7 +31,7 @@ class TermController extends Controller
         $validated = $request->validate([
             'term_type' => 'required|in:terms_of_use,privacy_policy,both',
             'terms_version' => 'nullable|string|max:20',
-            'visitor_uuid' => 'nullable|string|size:36|uuid',
+            'visitor_uuid' => 'nullable|string|max:36',
         ]);
 
         $termType = $validated['term_type'];
