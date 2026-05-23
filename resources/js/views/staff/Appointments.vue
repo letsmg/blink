@@ -178,7 +178,15 @@
               <svg class="w-4 h-4 text-emerald-500 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
               </svg>
-              <p class="text-xs text-emerald-600">{{ formatDate(apt.appointment_date) }} às {{ formatTime(apt.appointment_date) }}</p>
+              <p class="text-xs text-emerald-600">{{ formatDate(apt.date) }} às {{ apt.time }}</p>
+            </div>
+            <!-- Local -->
+            <div class="flex items-center gap-2 mb-1">
+              <svg class="w-4 h-4 text-emerald-500 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z" />
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 11a3 3 0 11-6 0 3 3 0 016 0z" />
+              </svg>
+              <p class="text-xs text-emerald-600">{{ apt.location?.name || 'Local não informado' }}</p>
             </div>
             <!-- Observações -->
             <p v-if="apt.notes" class="text-sm text-emerald-700 mt-2 ml-6 italic border-l-2 border-emerald-200 pl-3">{{ apt.notes }}</p>
@@ -284,6 +292,22 @@
               Selecionado: <strong>{{ selectedProfessional.full_name }}</strong>
               <button type="button" @click="clearProfessional" class="ml-2 text-red-500 hover:text-red-700 text-xs">Limpar</button>
             </p>
+          </div>
+
+          <!-- Local (dinâmico conforme profissional) -->
+          <div>
+            <label class="block text-sm font-medium text-emerald-800 mb-1">Local de Atendimento *</label>
+            <select
+              v-model="selectedLocation"
+              required
+              class="w-full px-4 py-2.5 border border-emerald-300 rounded-lg focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500 outline-none transition-colors bg-emerald-50/30"
+            >
+              <option value="">Selecione o profissional primeiro</option>
+              <option v-for="loc in locations" :key="loc.id" :value="loc.id">
+                {{ loc.name }} — {{ loc.city }}
+              </option>
+            </select>
+            <p v-if="!selectedProfessional" class="text-xs text-amber-600 mt-1">Escolha um profissional para ver os locais disponíveis.</p>
           </div>
 
           <!-- Data e Hora -->
@@ -411,7 +435,11 @@
           </div>
           <div>
             <span class="text-xs text-emerald-500 uppercase tracking-wider">Data e Horário</span>
-            <p class="text-emerald-900">{{ formatDateFull(viewingAppointment.appointment_date) }} às {{ formatTime(viewingAppointment.appointment_date) }}</p>
+            <p class="text-emerald-900">{{ formatDate(viewingAppointment.date) }} às {{ viewingAppointment.time }}</p>
+          </div>
+          <div>
+            <span class="text-xs text-emerald-500 uppercase tracking-wider">Local</span>
+            <p class="text-emerald-900">{{ viewingAppointment.location?.name || 'Não informado' }}</p>
           </div>
           <div v-if="viewingAppointment.notes">
             <span class="text-xs text-emerald-500 uppercase tracking-wider">Observações</span>
@@ -457,6 +485,8 @@ const patientResults = ref<any[]>([])
 const professionalResults = ref<any[]>([])
 const selectedPatient = ref<any>(null)
 const selectedProfessional = ref<any>(null)
+const selectedLocation = ref('')
+const locations = ref<any[]>([])
 const formDate = ref('')
 const formTime = ref('')
 const formNotes = ref('')
@@ -738,16 +768,38 @@ function searchProfessionals() {
   }, 300)
 }
 
+async function fetchLocations() {
+  if (!selectedProfessional.value) {
+    locations.value = []
+    selectedLocation.value = ''
+    return
+  }
+  try {
+    const { data } = await axios.get(`/staff/professionals/${selectedProfessional.value.id}/locations`)
+    locations.value = data.data || []
+    // Auto-select first location if only one available
+    if (locations.value.length === 1) {
+      selectedLocation.value = locations.value[0].id
+    }
+  } catch {
+    locations.value = []
+  }
+}
+
 function selectProfessional(p: any) {
   selectedProfessional.value = p
   professionalSearch.value = p.full_name
   professionalResults.value = []
+  selectedLocation.value = ''
+  fetchLocations()
 }
 
 function clearProfessional() {
   selectedProfessional.value = null
   professionalSearch.value = ''
   professionalResults.value = []
+  locations.value = []
+  selectedLocation.value = ''
 }
 
 function openCreateModal() {
@@ -772,15 +824,17 @@ function editAppointment(apt: any) {
   selectedProfessional.value = { id: apt.professional_id, full_name: apt.professional?.full_name, specialty: apt.professional?.specialty }
   patientSearch.value = apt.patient?.full_name || ''
   professionalSearch.value = apt.professional?.full_name || ''
-  const dt = new Date(apt.appointment_date)
-  formDate.value = dt.toISOString().split('T')[0]
-  formTime.value = dt.toTimeString().substring(0, 5)
+  selectedLocation.value = apt.location_id || ''
+  formDate.value = apt.date || ''
+  formTime.value = apt.time || ''
   formNotes.value = apt.notes || ''
   formIsReturn.value = apt.is_return || false
   formIsPaid.value = apt.is_paid || false
   formPaymentMethod.value = apt.payment_method || ''
   formError.value = ''
   showModal.value = true
+  // Carrega os locais do profissional para edição
+  fetchLocations()
 }
 
 function viewAppointment(apt: any) {
@@ -809,13 +863,20 @@ async function handleSave() {
     return
   }
 
+  if (!selectedLocation.value) {
+    formError.value = 'Selecione o local de atendimento.'
+    return
+  }
+
   formLoading.value = true
   formError.value = ''
 
   const payload: any = {
     patient_id: selectedPatient.value.id,
     professional_id: selectedProfessional.value.id,
-    appointment_date: `${formDate.value} ${formTime.value}:00`,
+    location_id: selectedLocation.value,
+    date: formDate.value,
+    time: formTime.value,
     notes: formNotes.value || null,
     is_return: formIsReturn.value,
   }

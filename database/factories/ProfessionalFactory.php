@@ -23,7 +23,8 @@ class ProfessionalFactory extends Factory
             'full_name' => fake()->name(),
             'specialty' => fake()->randomElement(['Cardiologia', 'Dermatologia', 'Ortopedia', 'Pediatria', 'Neurologia']),
             'professional_document' => fake()->numerify('CRM/## ####'),
-            'phone' => fake()->phoneNumber(),
+            'phone1' => fake()->phoneNumber(),
+            'phone2' => fake()->optional(0.3)->phoneNumber(),
             'is_active' => true,
         ];
     }

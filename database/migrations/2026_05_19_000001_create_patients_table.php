@@ -27,6 +27,8 @@ return new class extends Migration
             $table->string('state', 2)->nullable();
             $table->string('zip_code', 10)->nullable();
             $table->text('clinical_history')->nullable();
+            $table->string('phone1', 20)->nullable();
+            $table->string('phone2', 20)->nullable();
             $table->timestamps();
             $table->softDeletes();
         });

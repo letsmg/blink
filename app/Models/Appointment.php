@@ -13,7 +13,9 @@ class Appointment extends Model
     protected $fillable = [
         'patient_id',
         'professional_id',
-        'appointment_date',
+        'location_id',
+        'date',
+        'time',
         'notes',
         'is_paid',
         'payment_method',
@@ -25,7 +27,8 @@ class Appointment extends Model
     protected function casts(): array
     {
         return [
-            'appointment_date' => 'datetime',
+            'date' => 'date',
+            'time' => 'string',
             'is_paid' => 'boolean',
             'paid_at' => 'datetime',
             'is_return' => 'boolean',
@@ -46,6 +49,14 @@ class Appointment extends Model
     public function professional(): BelongsTo
     {
         return $this->belongsTo(Professional::class);
+    }
+
+    /**
+     * Location where this appointment takes place.
+     */
+    public function location(): BelongsTo
+    {
+        return $this->belongsTo(Location::class);
     }
 
     /**

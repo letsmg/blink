@@ -16,7 +16,9 @@ return new class extends Migration
             $table->id();
             $table->foreignId('patient_id')->constrained()->onDelete('cascade');
             $table->foreignId('professional_id')->constrained()->onDelete('cascade');
-            $table->dateTime('appointment_date');
+            $table->foreignId('location_id')->constrained()->onDelete('cascade');
+            $table->date('date');
+            $table->time('time');
             $table->text('notes')->nullable();
             // Payment status flags
             $table->boolean('is_paid')->default(false);

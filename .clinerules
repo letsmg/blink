@@ -1,97 +1,197 @@
-# Regras de Atuação e Engenharia de Software
+Regras de Atuação e Engenharia de Software
 Você é o copiloto de desenvolvimento, um engenheiro de software especialista sênior com pensamento crítico, foco em arquitetura limpa, segurança rigorosa de dados sensíveis, desenvolvimento orientado a APIs e automação eficiente.
 
 ###############################################################################
-# PART 1: DIRETRIZES GLOBAIS (Válidas para o ecossistema Laravel / Vue / Flutter)
+
+PART 1: DIRETRIZES GLOBAIS (Válidas para o ecossistema Laravel / Vue / Flutter)
 ###############################################################################
 
-1. Comunicação, Idioma e Resolução de Problemas
-- Idioma: Sempre responda, interaja e comente em português (Brasil).
-- Resiliência a Erros: Se uma solução ou comando falhar no ambiente e as configurações não mudaram, não repita o mesmo erro. Tente outra abordagem de resolução imediatamente.
-- Conclusão Clara: Ao terminar qualquer instrução, comando ou modificação, avise explicitamente que concluiu a tarefa.
+Comunicação, Idioma e Resolução de Problemas
 
-2. Autonomia, Escopo e Alinhamento Pró-Ativo
-- Autonomia Total: Você possui acesso completo ao projeto aberto no ambiente de desenvolvimento (Windsurf / VS Code). Não precisa pedir autorização para ler, analisar, criar ou editar arquivos. Proceda diretamente quando o objetivo for claro.
-- Validação de Abordagem (Obrigatório): Tudo o que o usuário solicitar para implementar, se houver uma forma mais fácil, eficiente ou um padrão de mercado diferente/melhor do que o sugerido no prompt, VOCÊ DEVE AVISAR NO CHAT ANTES DE ESCREVER O CÓDIGO. Aguarde a confirmação ou direcione a melhor escolha.
+Idioma: Sempre responda, interaja e comente em português (Brasil).
 
-3. Padrões de Código, Nomenclatura e Documentação
-- Formatação Inteligente: Siga estritamente o padrão técnico exigido pela stack (CamelCase, snake_case ou PascalCase conforme o framework), ignorando formatações informais feitas no prompt.
-- Banco de Dados e Código Internacionalizado: Todas as tabelas, colunas, chaves, relacionamentos, controllers, classes, repositories, services, enums e policies devem ser obrigatoriamente nomeados em inglês. Se for solicitado um campo ou arquivo em português, traduza-o para o inglês. Apenas a interface do front-end visível aos usuários estará em português.
-- Comentários Diretos: Sempre comente códigos gerados ou alterados de forma resumida, direta e focada no PORQUÊ (intenção) daquela lógica, e não no que o código faz de forma óbvia.
-- Documentação Viva: Mantenha o arquivo `README.md` sempre atualizado. O conteúdo deve ser escrito primeiramente em português (Brasil) e conter um link âncora/seção no topo direcionando para a versão correspondente em inglês logo abaixo.
+Resiliência a Erros: Se uma solução ou comando falhar no ambiente e as configurações não mudaram, não repita o mesmo erro. Tente outra abordagem de resolução imediatamente.
 
-4. Versionamento, Commits e Deploys (Bloqueio Rígido)
-- Bloqueio de Automação: Nunca, sob circunstância alguma, faça commits, pushes ou deploys automáticos sem uma solicitudade explícita e clara no chat. O controle final do histórico do Git e do ambiente de produção é exclusivo do usuário.
+Conclusão Clara: Ao terminar qualquer instrução, comando ou modificação, avise explicitamente que concluiu a tarefa.
 
-5. Qualidade de Código e Testes
-- Testes Orientados ao Negócio: Os testes unitários criados no sistema devem, obrigatoriamente, atender e validar o plano de negócio e suas regras de fluxo (ex: consistência de agendamentos, validação de acessos e bloqueios de segurança), garantindo que a aplicação funcione exatamente conforme as regras descritas na especificação.
+Autonomia, Escopo e Alinhamento Pró-Ativo
 
-6. Governança e Segurança Rígida (Dados de Saúde)
-- Criptografia de Credenciais: Usar obrigatoriamente hash Argon2id para a persistência de senhas e dados de autenticação sensíveis (como e-mails em colunas de busca/identificação).
-- Sanitização de Entrada: Aplicar rigorosamente mecanismos de limpeza e trim (ex: usando middlewares ou Form Requests no Laravel) em todos os dados recebidos no backend antes de qualquer processamento ou persistência.
-- Sanitização de Saída: Aplicar mecanismos nativos de escape de contextos para mitigar riscos de XSS ao renderizar dados dinâmicos no front-end.
-- Validação Dupla: Todos os campos do sistema devem, obrigatoriamente, ser validados tanto no front-end (VueJS) para usabilidade quanto no back-end (Laravel Form Requests) para segurança impenetrável.
+Autonomia Total: Você possui acesso completo ao projeto aberto no ambiente de desenvolvimento (Windsurf / VS Code). Não precisa pedir autorização para ler, analisar, criar ou editar arquivos. Proceda diretamente quando o objetivo for claro.
+
+Validação de Abordagem (Obrigatório): Tudo o que o usuário solicitar para implementar, se houver uma forma mais fácil, eficiente ou um padrão de mercado diferente/melhor do que o sugerido no prompt, VOCÊ DEVE AVISAR NO CHAT ANTES DE ESCREVER O CÓDIGO. Aguarde a confirmação ou direcione a melhor escolha.
+
+Padrões de Código, Nomenclatura e Documentação
+
+Formatação Inteligente: Siga estritamente o padrão técnico exigido pela stack (CamelCase, snake_case ou PascalCase conforme o framework), ignorando formatações informais feitas no prompt.
+
+Banco de Dados e Código Internacionalizado: Todas as tabelas, colunas, chaves, relacionamentos, controllers, classes, repositories, services, enums e policies devem ser obrigatoriamente nomeados em inglês. Se for solicitado um campo ou arquivo em português, traduza-o para o inglês. Apenas a interface do front-end visível aos usuários estará em português.
+
+Comentários Diretos: Sempre comente códigos gerados ou alterados de forma resumida, direta e focada no PORQUÊ (intenção) daquela lógica, e não no que o código faz de forma óbvia.
+
+Documentação Viva: Mantenha o arquivo README.md sempre atualizado. O conteúdo deve ser escrito primeiramente em português (Brasil) e conter um link âncora/seção no topo direcionando para a versão correspondente em inglês logo abaixo.
+
+Versionamento, Commits e Deploys (Bloqueio Rígido)
+
+Bloqueio de Automação: Nunca, sob circunstância alguma, faça commits, pushes ou deploys automáticos sem uma solicitação explícita e clara no chat. O controle final do histórico do Git e do ambiente de produção é exclusivo do usuário.
+
+Qualidade de Código e Testes
+
+Testes Orientados ao Negócio: Os testes unitários criados no sistema devem, obrigatoriamente, atender e validar o plano de negócio e suas regras de fluxo (ex: consistência de agendamentos, validação de acessos, disponibilidade de locais por profissional e bloqueios de segurança), garantindo que a aplicação funcione exatamente conforme as regras descritas na especificação.
+
+Governança e Segurança Rígida (Dados de Saúde)
+
+Criptografia de Credenciais: Usar obrigatoriamente hash Argon2id para a persistência de senhas e dados de autenticação sensíveis.
+
+Sanitização de Entrada: Aplicar rigorosamente mecanismos de limpeza e trim (ex: usando middlewares ou Form Requests no Laravel) em todos os dados recebidos no backend antes de qualquer processamento ou persistência.
+
+Sanitização de Saída: Aplicar mecanismos nativos de escape de contextos para mitigar riscos de XSS ao renderizar dados dinâmicos no front-end.
+
+Validação Dupla: Todos os campos do sistema devem, obrigatoriamente, ser validados tanto no front-end (VueJS/TypeScript) para usabilidade quanto no back-end (Laravel Form Requests) para segurança impenetrável.
 
 ###############################################################################
-# PART 2: ESPECIFICAÇÕES TÉCNICAS E REGRAS DE NEGÓCIO DO PROJETO
+
+PART 2: ESPECIFICAÇÕES TÉCNICAS E REGRAS DE NEGÓCIO DO PROJETO
 ###############################################################################
 
-1. Arquitetura Baseada inteiramente em APIs & Autenticação
-- Comunicação Unificada: O sistema será movido inteiramente por APIs RESTful no ecossistema backend (Laravel). Essa infraestrutura única servirá tanto a SPA atual (Vue.js) quanto o aplicativo móvel que será construído futuramente em Dart/Flutter.
-- Autenticação Padrão de Mercado: O fluxo de segurança e gerenciamento de sessões das APIs deve ser implementado estritamente utilizando JWT (JSON Web Tokens) junto do .
-- Armazenamento Seguro de Tokens (Anti-XSS): Em ambientes web (Vue.js), é terminantemente proibido armazenar tokens de acesso ou refresh tokens no localStorage ou sessionStorage. O tráfego de autenticação deve ser regido por Cookies seguros com as flags HttpOnly (bloqueio de leitura via JavaScript), Secure (apenas HTTPS) e SameSite=Lax/Strict para mitigação rigorosa de ataques XSS e CSRF. No Flutter, utilizar o armazenamento nativo seguro (Keychain/Keystore via pacotes como flutter_secure_storage).
+Arquitetura Baseada inteiramente em APIs & Autenticação
 
-2. Estrutura do Backend e Banco de Dados
-- Banco de Dados: PostgreSQL.
-- Padrão de Projeto: Modelo MVC expandido utilizando a separação de conceitos padrão de mercado: Controllers, Services (regras de negócio), Repositories (consultas e persistência), Requests (Validação de formulários) e Policies (Autorização de acesso).
-- Migrations Estritas: Nunca crie migrations para adicionar campos isolados em tabelas que ainda estão em desenvolvimento ativo. Altere a migration original que cria a tabela e execute o reset estrutural (`php artisan migrate:fresh`).
+Comunicação Unificada: O sistema será movido inteiramente por APIs RESTful no ecossistema backend (Laravel). Essa infraestrutura única servirá tanto a SPA atual (Vue.js) quanto o aplicativo móvel que será construído futuramente em Dart/Flutter.
 
-3. Massa de Dados e Facilitadores de Desenvolvimento (Ambiente Local)
-- Seeders e Factories: Imediatamente após a criação de qualquer tabela do banco de dados, devem ser criados seus respectivos Seeders e Factories configurados para cadastrar e popular pelo menos 10 registros fictícios realistas de cada tabela no ambiente de desenvolvimento local.
-- Auxiliares TypeScript para Formulários: No front-end (Vue.js), deve ser implementado um arquivo TypeScript (`.ts`) dedicado contendo funções helper de preenchimento automático de formulários. Toda página de cadastro de dados deve implementar visualmente dois botões auxiliares: um botão para preencher automaticamente todos os campos com dados de teste válidos e um botão para limpar o formulário.
-- Facilitador de Login: Na tela de login, deve haver uma seção/lista lateral ou em anexo exibindo os usuários de teste gerados no banco de dados com links acionáveis. Ao clicar em um usuário dessa lista, o formulário de login e senha deve ser preenchido automaticamente com as credenciais selecionadas para agilizar o fluxo de testes locais.
+Autenticação Padrão de Mercado: O fluxo de segurança e gerenciamento de sessões das APIs deve ser implementado estritamente utilizando JWT (JSON Web Tokens) com a biblioteca tymon/jwt-auth (ou similar homologada no Laravel).
 
-4. Arquitetura de Layouts no Front-end (Vue.js)
-- Divisão de Componentes Globais: As páginas da aplicação Vue.js devem ser rigidamente divididas estruturalmente usando componentes de Layout reaproveitáveis para garantir consistência visual e facilidade de manutenção.
-- Fluxo Não Autenticado (Público): As páginas acessíveis sem login devem renderizar obrigatoriamente a combinação dos componentes `Header` (topo) e `Footer` (rodapé).
-- Fluxo Autenticado (Privado): As páginas restritas a usuários logados devem renderizar obrigatoriamente os componentes `AuthHeader` e `AuthFooter`.
-- Organização do Escopo HTML / Body: Para permitir que o conteúdo central (body) de cada tela seja editado de forma independente e simplificada mantendo o mesmo padrão do projeto, a estrutura deve seguir as seguintes regras:
-  * Os componentes de cabeçalho (`Header` e `AuthHeader`) devem conter e gerenciar toda a estrutura de tags de abertura iniciais do layout, estendendo-se explicitamente até a tag de abertura `<body>` (ou container wrapper principal equivalente).
-  * Os componentes de rodapé (`Footer` and `AuthFooter`) devem encapsular as rotinas finais e realizar estritamente o fechamento dessa mesma estrutura, incluindo a tag de fechamento `</body>` (ou container wrapper correspondente).
+Armazenamento Seguro de Tokens (Anti-XSS): Em ambientes web (Vue.js), é terminantemente proibido armazenar tokens de acesso ou refresh tokens no localStorage ou sessionStorage. O tráfego de autenticação deve ser regido por Cookies seguros com as flags HttpOnly (bloqueio de leitura via JavaScript), Secure (apenas HTTPS) e SameSite=Lax/Strict para mitigação rigorosa de ataques XSS e CSRF. No Flutter, utilizar o armazenamento nativo seguro (Keychain/Keystore via pacotes como flutter_secure_storage).
 
-5. Controle de Acesso e Governança (Níveis de Usuário)
-- Controle via Enums PHP: O nível de acesso (`role`) do usuário deve ser rigidamente regido por um PHP Enum com os seguintes valores:
-  * `0` => Patient (Paciente)
-  * `1` => Admin (Staff - Administrador)
-  * `2` => Operational (Staff - Operacional)
-- Isolamento de Áreas Logadas: O sistema deve possuir barreiras físicas e lógicas de rotas (Middlewares baseados nos escopos/tokens do JWT):
-  * Área do Paciente vs Área do Staff (Admin + Operational).
-  * Usuários logados em uma determinada área NÃO podem acessar áreas não logadas.
-  * Um usuário do tipo Paciente está estritamente proibido de acessar a área de Staff, e qualquer usuário Staff está proibido de acessar rotas exclusivas de Pacientes.
+Estrutura do Backend e Banco de Dados
 
-6. Segurança e Criptografia Avançada de Dados do Cliente
-- Proteção de CPF: Por se tratar de um sistema de saúde, dados identificáveis como o CPF devem ser armazenados no banco de dados PostgreSQL utilizando criptografia adequada/assimétrica ou rotinas nativas de criptografia baseadas em chaves gerenciadas pelo ambiente (`.env`). Nunca salve o CPF in natura (texto limpo).
-- Governança de Uso: Nenhum usuário (Paciente ou Staff) poderá utilizar as funcionalidades ativas do sistema sem antes registrar o aceite explícito aos Termos de Uso e às Políticas de Privacidade vigentes. Esse estado de aceite deve ser verificado e persistido.
+Banco de Dados: PostgreSQL.
 
-7. Entidades do Banco de Dados (Tabelas em Inglês)
+Padrão de Projeto: Modelo MVC expandido utilizando a separação de conceitos padrão de mercado: Controllers, Services (regras de negócio), Repositories (consultas e persistência), Requests (Validação de formulários) e Policies (Autorização de acesso).
+
+Migrations Estritas: Nunca crie migrations para adicionar campos isolados em tabelas que ainda estão em desenvolvimento ativo. Altere a migration original que cria a tabela e execute o reset estrutural (php artisan migrate:fresh).
+
+Massa de Dados e Facilitadores de Desenvolvimento (Ambiente Local)
+
+Seeders e Factories: Imediatamente após a criação de qualquer tabela do banco de dados, devem ser criados seus respectivos Seeders e Factories configurados para cadastrar e popular pelo menos 10 registros fictícios realistas de cada tabela no ambiente de desenvolvimento local (incluindo vínculos na tabela pivô de locais).
+
+Auxiliares TypeScript para Formulários: No front-end (Vue.js), deve ser implementado um arquivo TypeScript (.ts) dedicado contendo funções helper de preenchimento automático de formulários. Toda página de cadastro de dados deve implementar visualmente dois botões auxiliares: um botão para preencher automaticamente todos os campos com dados de teste válidos e um botão para limpar o formulário.
+
+Facilitador de Login: Na tela de login, deve haver uma seção/lista lateral ou em anexo exibindo os usuários de teste gerados no banco de dados com links acionáveis. Ao clicar em um usuário dessa lista, o formulário de login e senha deve ser preenchido automaticamente com as credenciais selecionadas para agilizar o fluxo de testes locais.
+
+Arquitetura de Layouts no Front-end (Vue.js)
+
+Divisão de Componentes Globais: As páginas da aplicação Vue.js devem ser rigidamente divididas estruturalmente usando componentes de Layout reaproveitáveis para garantir consistência visual e facilidade de manutenção.
+
+Fluxo Não Autenticado (Público): As páginas acessíveis sem login devem renderizar obrigatoriamente a combinação dos componentes Header (topo) e Footer (rodapé).
+
+Fluxo Autenticado (Privado): As páginas restritas a usuários logados devem renderizar obrigatoriamente os componentes AuthHeader e AuthFooter.
+
+Organização do Escopo HTML / Body: Para permitir que o conteúdo central (body) de cada tela seja editado de forma independente e simplificada mantendo o mesmo padrão do projeto, a estrutura deve seguir as seguintes regras:
+
+Os componentes de cabeçalho (Header e AuthHeader) devem conter e gerenciar toda a estrutura de tags de abertura iniciais do layout, estendendo-se explicitamente até a tag de abertura <body> (ou container wrapper principal equivalente).
+
+Os componentes de rodapé (Footer e AuthFooter) devem encapsular as rotinas finais e realizar estritamente o fechamento dessa mesma estrutura, incluindo a tag de fechamento </body> (ou container wrapper correspondente).
+
+Controle de Acesso e Governança (Níveis de Usuário)
+
+Controle via Enums PHP: O nível de acesso (role) do usuário deve ser rigidamente regido por um PHP Enum com os seguintes valores:
+
+0 => Patient (Paciente)
+
+1 => Admin (Staff - Administrador)
+
+2 => Operational (Staff - Operacional)
+
+Isolamento de Áreas Logadas: O sistema deve possuir barreiras físicas e lógicas de rotas (Middlewares baseados nos escopos/tokens do JWT):
+
+Área do Paciente vs Área do Staff (Admin + Operational).
+
+Usuários logados em uma determinada área NÃO podem acessar áreas não logadas.
+
+Um usuário do tipo Paciente está estritamente proibido de acessar a área de Staff, e qualquer usuário Staff está proibido de acessar rotas exclusivas de Pacientes.
+
+Segurança e Criptografia Avançada de Dados do Cliente
+
+Proteção de CPF: Por se tratar de um sistema de saúde, dados identificáveis como o CPF devem ser armazenados no banco de dados PostgreSQL utilizando criptografia adequada/assimétrica ou rotinas nativas de criptografia baseadas em chaves gerenciadas pelo ambiente (.env). Nunca salve o CPF in natura (texto limpo).
+
+Governança de Uso: Nenhum usuário (Paciente ou Staff) poderá utilizar as funcionalidades ativas do sistema sem antes registrar o aceite explícito aos Termos de Uso e às Políticas de Privacidade vigentes. Esse estado de aceite deve ser verificado e persistido.
+
+Entidades do Banco de Dados (Tabelas em Inglês)
 As migrações e modelos devem contemplar as seguintes entidades e suas respectivas regras de negócio:
-- `users`: Dados gerais de autenticação e credenciais (com hash Argon2id).
-- `patients`: Dados básicos do paciente (nome, data de nascimento, CPF criptografado, queixa principal, endereço completo: logradouro, bairro, cidade, e histórico clínico relatado).
-- `professionals`: Médicos, dentistas, fisioterapeutas, etc.
-- `appointments` (Agenda): Controle de marcação de consultas. Deve conter obrigatoriamente flags/campos para identificar:
-  * Se a consulta está "a pagar" ou se já foi "paga".
-  * O método de pagamento utilizado.
-  * Se a consulta é um "retorno" ou uma consulta inicial.
-- `diagnostics` (Diagnósticos): Histórico clínico atrelado ao paciente. Deve obrigatoriamente registrar a data em que o atendimento foi realizado e o profissional (`professional_id`) responsável por aquele atendimento específico.
-- `messages`: Sistema de comunicação interna. Deve permitir selecionar especificamente para qual pessoa (destino) a mensagem está sendo enviada.
-- `reports`: Relatórios consolidados do sistema.
-- `unavailability_periods`: Períodos de indisponibilidade de profissionais. Permite que profissionais informem datas futuras em que não realizarão atendimentos (ex: férias, plantão externo, licença). Utilizado pelo calendário de agendamentos para bloquear visualmente as datas indisponíveis de cada profissional.
 
-8. Gestão de Indisponibilidade de Profissionais
-- O sistema deve permitir que profissionais (ou staff administrativo) cadastrem períodos de indisponibilidade, informando data de início, data de fim e motivo opcional.
-- Não pode haver sobreposição de períodos de indisponibilidade para o mesmo profissional.
-- O calendário de agendamentos deve consultar a rota `GET /api/staff/professionals/{professional}/unavailability/future` para obter as datas bloqueadas e impedir agendamentos nesses períodos.
-- Apenas usuários Staff (Admin e Operational) podem gerenciar esses períodos via API.
+users: Dados gerais de autenticação e credenciais (com hash Argon2id).
 
-9. Sistema de Mensageria e Front-end (Staff)
-- Indicador Dinâmico: O menu principal da área do Staff (Admin e Operacional) deve exibir obrigatoriamente um ícone de notificações dinâmico indicando o número exato de mensagens não lidas destinadas ao profissional ou operador atualmente logado. A query de contagem deve filtrar estritamente as mensagens cujo destino corresponde ao usuário autenticado (via payload do JWT) e que possuam o status de não lidas.
+patients: Dados básicos do paciente (nome, data de nascimento, CPF criptografado, queixa principal, endereço completo: logradouro, bairro, cidade, e histórico clínico relatado).
+
+professionals: Médicos, dentistas, fisioterapeutas, etc. Deve conter os campos obrigatórios phone1 e phone2 (formatados como string/varchars).
+
+locations: Locais físicos de atendimento médico/clínico. Todos os campos são obrigatórios: name, address, zip_code, neighborhood, city.
+
+location_professional: Tabela pivô Muitos-para-Muitos (N:N) que estabelece explicitamente quais profissionais estão autorizados e vinculados a atender em quais locais. Campos: professional_id e location_id.
+
+appointments (Agenda): Controle de marcação de consultas. Todos os campos de amarração são obrigatórios. Deve conter:
+
+professional_id, patient_id e location_id (chave estrangeira explícita salvando onde a consulta ocorrerá).
+
+Campos separados e obrigatórios para date (data) e time (horário/hora do agendamento).
+
+Flags/campos para identificar: Se a consulta está "a pagar" ou se já foi "paga"; O método de pagamento utilizado; Se a consulta é um "retorno" ou uma consulta inicial.
+
+diagnostics (Diagnósticos): Histórico clínico atrelado ao paciente. Deve obrigatoriamente registrar a data em que o atendimento foi realizado e o profissional (professional_id) responsável por aquele atendimento específico.
+
+messages: Sistema de comunicação interna. Deve permitir selecionar especificamente para qual pessoa (destino) a mensagem está sendo enviada.
+
+reports: Relatórios consolidados do sistema.
+
+unavailability_periods: Períodos de indisponibilidade de profissionais (ex: férias, plantão externo, licença). Bloqueia a agenda do profissional de forma macro no calendário geral.
+
+Regras de Negócio de Agendamento e Vínculo de Locais
+
+Seleção Dinâmica de Locais (Filtro por Tabela Pivô): No fluxo de criação de um agendamento (appointments), o cliente/operador deve selecionar o profissional primeiro. A API deve obrigatoriamente expor um endpoint que filtre e retorne apenas os locais vinculados a esse profissional específico através da tabela location_professional. É proibido listar um local onde o profissional não atenda.
+
+Histórico Preservado: A tabela appointments carrega o location_id original diretamente para fins de auditoria e relatórios históricos, garantindo que alterações futuras na tabela pivô não alterem o registro de onde a consulta do passado foi realizada de fato.
+
+Gestão de Indisponibilidade de Profissionais
+
+O sistema deve permitir que profissionais (ou staff administrativo) cadastrem períodos de indisponibilidade, informando data de início, data de fim e motivo opcional.
+
+Não pode haver sobreposição de períodos de indisponibilidade para o mesmo profissional.
+
+O calendário de agendamentos deve consultar a rota GET /api/staff/professionals/{professional}/unavailability/future para obter as datas bloqueadas e impedir agendamentos nesses períodos.
+
+Apenas usuários Staff (Admin e Operational) podem gerenciar esses períodos via API.
+
+Sistema de Mensageria e Front-end (Staff)
+
+Indicador Dinâmico: O menu principal da área do Staff (Admin e Operacional) deve exibir obrigatoriamente um ícone de notificações dinâmico indicando o número exato de mensagens não lidas destinadas ao profissional ou operador atualmente logado. A query de contagem deve filtrar estritamente as mensagens cujo destino corresponde ao usuário autenticado (via payload do JWT) e que possuam o status de não lidas.
+
+# Regras Gerais de SEO e Social Media (Páginas Públicas)
+
+Sempre que criar, refatorar ou estruturar páginas, rotas ou componentes que pertencem à área pública (não autenticada) do sistema, você DEVE aplicar rigorosamente os seguintes padrões de SEO e compartilhamento social:
+
+## 1. Meta Tags de SEO Técnico
+
+Em todas as visualizações ou controladores de páginas públicas, garanta a presença de:
+
+- **Title:** Título único, descritivo, contendo a palavra-chave principal no início (máx. 60 caracteres).
+- **Description:** Meta description atraente e otimizada com palavras-chave relevantes (entre 150 e 160 caracteres).
+- **Keywords:** Incluir meta keywords com termos semanticamente alinhados ao propósito da página.
+- **Robots:** Definir explicitamente `<meta name="robots" content="index, follow">` para permitir a indexação e a passagem de autoridade pelos links.
+
+## 2. Protocolos para Redes Saciais (Open Graph & Twitter Cards)
+
+Insira as tags necessárias para garantir um ranqueamento e exibição visual rica quando o link for compartilhado:
+
+- **Open Graph (Facebook/LinkedIn/WhatsApp):**
+  - `og:title`, `og:description`, `og:type` (geralmente 'website' ou 'article').
+  - `og:url` (URL canônica da página).
+  - `og:image` (URL absoluta para uma imagem de preview otimizada, ex: 1200x630px).
+- **Twitter Cards:**
+  - `twitter:card` (definido como 'summary_large_image').
+  - `twitter:title`, `twitter:description`, `twitter:image`.
+
+## 3. Arquivos de Estrutura e Indexação (Raiz do Projeto)
+
+Ao manipular ou criar a estrutura base de rotas/arquivos públicos:
+
+- **robots.txt:** Deve permitir o rastreamento geral (`User-agent: *`, `Allow: /`), bloquear explicitamente caminhos restritos ou de autenticação (ex: `/admin`, `/login`, `/dashboard`) e apontar o caminho absoluto do Sitemap.
+- **sitemap.xml:** Deve listar dinamicamente ou estaticamente todas as páginas públicas ativas, incluindo a tag `<loc>`, a frequência de modificação (`<changefreq>`) e a prioridade de relevância (`<priority>`).

@@ -81,10 +81,20 @@
 </template>
 
 <script setup lang="ts">
-import { ref } from 'vue'
+import { ref, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
 import axios from 'axios'
 import { testUsers, type TestUser } from '../utils/formHelpers'
+import { useMeta } from '../composables/useMeta'
+
+onMounted(() => {
+  useMeta({
+    title: 'Entrar - Plataforma de Gestão de Saúde',
+    description: 'Acesse sua conta no Blink para gerenciar agendamentos, pacientes e sua clínica. Ambiente seguro com autenticação JWT e proteção de dados.',
+    keywords: 'login, entrar, gestão de clínicas, agendamento, sistema de saúde, acesso seguro',
+    ogType: 'website',
+  })
+})
 
 const router = useRouter()
 const loading = ref(false)

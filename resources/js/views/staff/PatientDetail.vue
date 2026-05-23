@@ -52,7 +52,7 @@
         <div v-if="patient.appointments?.length" class="space-y-3">
           <div v-for="appt in patient.appointments" :key="appt.id" class="p-3 bg-emerald-50 rounded-lg flex items-center justify-between">
             <div>
-              <p class="text-sm font-medium text-emerald-900">{{ formatDate(appt.appointment_date) }}</p>
+              <p class="text-sm font-medium text-emerald-900">{{ formatDate(appt.date) }} às {{ appt.time }}</p>
               <p class="text-xs text-emerald-600">{{ appt.professional?.full_name || 'Profissional' }}</p>
             </div>
             <span class="px-2 py-1 text-xs font-medium rounded-full"

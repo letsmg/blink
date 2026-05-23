@@ -5,6 +5,7 @@ namespace App\Models;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
+use Illuminate\Database\Eloquent\Relations\BelongsToMany;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Database\Eloquent\SoftDeletes;
 
@@ -17,7 +18,8 @@ class Professional extends Model
         'full_name',
         'specialty',
         'professional_document',
-        'phone',
+        'phone1',
+        'phone2',
         'is_active',
     ];
 
@@ -52,5 +54,15 @@ class Professional extends Model
     public function unavailabilityPeriods(): HasMany
     {
         return $this->hasMany(UnavailabilityPeriod::class);
+    }
+
+    /**
+     * Locations where this professional provides care.
+     * Many-to-Many relationship via location_professional pivot table.
+     */
+    public function locations(): BelongsToMany
+    {
+        return $this->belongsToMany(Location::class, 'location_professional')
+            ->withTimestamps();
     }
 }

@@ -18,7 +18,8 @@ return new class extends Migration
             $table->string('full_name');
             $table->string('specialty')->nullable(); // Medical specialty
             $table->string('professional_document')->nullable(); // CRM/CRP/COREN number
-            $table->string('phone')->nullable();
+            $table->string('phone1')->nullable();
+            $table->string('phone2')->nullable();
             $table->boolean('is_active')->default(true);
             $table->timestamps();
             $table->softDeletes();

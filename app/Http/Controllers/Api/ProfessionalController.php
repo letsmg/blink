@@ -20,4 +20,19 @@ class ProfessionalController extends Controller
 
         return response()->json(['data' => $professionals]);
     }
+
+    /**
+     * Get locations linked to a specific professional.
+     * Used for dynamic location selection when scheduling appointments.
+     * Filtra apenas os locais onde o profissional atende via tabela pivô.
+     */
+    public function locations(Professional $professional): JsonResponse
+    {
+        $locations = $professional->locations()
+            ->select('locations.id', 'locations.name', 'locations.address', 'locations.city')
+            ->orderBy('locations.name')
+            ->get();
+
+        return response()->json(['data' => $locations]);
+    }
 }

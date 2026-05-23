@@ -158,10 +158,20 @@
 </template>
 
 <script setup lang="ts">
-import { ref } from 'vue'
+import { ref, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
 import axios from 'axios'
 import { generateTestPatientData } from '../utils/formHelpers'
+import { useMeta } from '../composables/useMeta'
+
+onMounted(() => {
+  useMeta({
+    title: 'Cadastro - Crie sua Conta no Blink',
+    description: 'Cadastre-se gratuitamente no Blink e tenha acesso a agendamento de consultas, prontuário digital e gestão da sua saúde em um só lugar.',
+    keywords: 'cadastro, criar conta, registro, paciente, agendamento, saúde, clínica online',
+    ogType: 'website',
+  })
+})
 
 const router = useRouter()
 const loading = ref(false)

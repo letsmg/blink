@@ -5,6 +5,7 @@ namespace Database\Seeders;
 use App\Enums\UserRole;
 use App\Models\Appointment;
 use App\Models\Diagnostic;
+use App\Models\Location;
 use App\Models\Message;
 use App\Models\Patient;
 use App\Models\Professional;
@@ -79,10 +80,40 @@ class DatabaseSeeder extends Seeder
                 'user_id' => $user->id,
                 'full_name' => $fullName,
                 'specialty' => $specialty,
-                'professional_document' => fake()->numerify('CRM/'.str_pad((string)($i + 1), 2, '0', STR_PAD_LEFT).' #####'),
-                'phone' => fake()->phoneNumber(),
+                'professional_document' => fake()->numerify('CRM/'.str_pad((string) ($i + 1), 2, '0', STR_PAD_LEFT).' #####'),
+                'phone1' => fake()->phoneNumber(),
+                'phone2' => fake()->optional(0.3)->phoneNumber(),
                 'is_active' => true,
             ]);
+        }
+
+        // ─── LOCATIONS ───────────────────────────────────────────
+        $locationNames = [
+            'Clínica Blink Centro',
+            'Clínica Blink Zona Sul',
+            'Hospital Geral Metropolitano',
+            'Centro Médico Integrado',
+            'Clínica Especializada Norte',
+        ];
+
+        $locations = [];
+        foreach ($locationNames as $name) {
+            $locations[] = Location::create([
+                'name' => $name,
+                'address' => fake()->streetAddress(),
+                'zip_code' => fake()->postcode(),
+                'neighborhood' => fake()->word(),
+                'city' => fake()->city(),
+            ]);
+        }
+
+        // ─── LOCATION_PROFESSIONAL (Pivot) ───────────────────────
+        // Vincula cada profissional a 1-3 locais aleatórios
+        foreach ($professionals as $prof) {
+            $assignedLocations = fake()->randomElements($locations, rand(1, 3));
+            foreach ($assignedLocations as $loc) {
+                $prof->locations()->attach($loc->id);
+            }
         }
 
         // ─── PATIENTS ────────────────────────────────────────────
@@ -102,6 +133,8 @@ class DatabaseSeeder extends Seeder
                 'state' => fake()->stateAbbr(),
                 'zip_code' => fake()->postcode(),
                 'clinical_history' => fake()->optional(0.6)->sentence(10),
+                'phone1' => fake()->phoneNumber(),
+                'phone2' => fake()->optional(0.3)->phoneNumber(),
             ]);
             $patients[] = $patient;
         }
@@ -114,11 +147,20 @@ class DatabaseSeeder extends Seeder
             // 1-3 appointments per patient
             $numAppts = rand(1, 3);
             for ($j = 0; $j < $numAppts; $j++) {
+                $professional = $professionals[array_rand($professionals)];
+                // Pega um local vinculado ao profissional, ou o primeiro disponível
+                $professionalLocations = $professional->locations()->pluck('locations.id')->toArray();
+                $locationId = ! empty($professionalLocations)
+                    ? $professionalLocations[array_rand($professionalLocations)]
+                    : $locations[array_rand($locations)]->id;
+
                 $apptDate = fake()->dateTimeBetween('-3 months', '+1 month');
                 $appointments[] = Appointment::create([
                     'patient_id' => $patient->id,
-                    'professional_id' => $professionals[array_rand($professionals)]->id,
-                    'appointment_date' => $apptDate->format('Y-m-d H:i:s'),
+                    'professional_id' => $professional->id,
+                    'location_id' => $locationId,
+                    'date' => $apptDate->format('Y-m-d'),
+                    'time' => $apptDate->format('H:i:s'),
                     'is_paid' => fake()->boolean(60),
                     'payment_method' => fake()->optional(0.7)->randomElement($paymentMethods),
                     'paid_at' => fake()->optional(0.4)->dateTimeBetween('-2 months', 'now'),
@@ -188,7 +230,7 @@ class DatabaseSeeder extends Seeder
             Report::create([
                 'generated_by' => $allUsers->random()->id,
                 'type' => $reportTypes[array_rand($reportTypes)],
-                'title' => "Relatório " . fake()->randomElement(['Mensal', 'Trimestral', 'Anual', 'Operacional']) . " - " . fake()->monthName(),
+                'title' => 'Relatório '.fake()->randomElement(['Mensal', 'Trimestral', 'Anual', 'Operacional']).' - '.fake()->monthName(),
                 'data' => json_encode([
                     'total_patients' => rand(50, 200),
                     'total_appointments' => rand(100, 500),
@@ -211,7 +253,7 @@ class DatabaseSeeder extends Seeder
                     ? fake()->dateTimeBetween('-6 months', '-1 month')
                     : fake()->dateTimeBetween('now', '+3 months');
 
-                $endDate = (clone $startDate)->modify('+' . rand(3, 15) . ' days');
+                $endDate = (clone $startDate)->modify('+'.rand(3, 15).' days');
 
                 UnavailabilityPeriod::create([
                     'professional_id' => $prof->id,
@@ -223,13 +265,13 @@ class DatabaseSeeder extends Seeder
         }
 
         $this->command->info('✅ Database seeded successfully!');
-        $this->command->info("   Users: " . User::count());
-        $this->command->info("   Patients: " . Patient::count());
-        $this->command->info("   Professionals: " . Professional::count());
-        $this->command->info("   Appointments: " . Appointment::count());
-        $this->command->info("   Diagnostics: " . Diagnostic::count());
-        $this->command->info("   Messages: " . Message::count());
-        $this->command->info("   Reports: " . Report::count());
-        $this->command->info("   Unavailability Periods: " . UnavailabilityPeriod::count());
+        $this->command->info('   Users: '.User::count());
+        $this->command->info('   Patients: '.Patient::count());
+        $this->command->info('   Professionals: '.Professional::count());
+        $this->command->info('   Appointments: '.Appointment::count());
+        $this->command->info('   Diagnostics: '.Diagnostic::count());
+        $this->command->info('   Messages: '.Message::count());
+        $this->command->info('   Reports: '.Report::count());
+        $this->command->info('   Unavailability Periods: '.UnavailabilityPeriod::count());
     }
 }

@@ -11,7 +11,6 @@ use App\Http\Controllers\Api\UserController;
 use App\Http\Middleware\CheckUserRole;
 use Illuminate\Support\Facades\Route;
 
-
 /*
 |--------------------------------------------------------------------------
 | API Routes
@@ -41,7 +40,7 @@ Route::middleware('auth:sanctum')->group(function () {
     // =============================================
     // Patient Area (Patient role only)
     // =============================================
-    Route::middleware(CheckUserRole::class . ':patient')
+    Route::middleware(CheckUserRole::class.':patient')
         ->prefix('patient')
         ->group(function () {
             // Patient-specific routes will be added here
@@ -50,7 +49,7 @@ Route::middleware('auth:sanctum')->group(function () {
     // =============================================
     // Staff Area (Admin + Operational)
     // =============================================
-    Route::middleware(CheckUserRole::class . ':staff')
+    Route::middleware(CheckUserRole::class.':staff')
         ->prefix('staff')
         ->group(function () {
 
@@ -88,6 +87,9 @@ Route::middleware('auth:sanctum')->group(function () {
 
             // Professionals list
             Route::get('/professionals', [ProfessionalController::class, 'index']);
+
+            // Professional locations (dynamic filter for appointment scheduling)
+            Route::get('/professionals/{professional}/locations', [ProfessionalController::class, 'locations']);
 
             // Professional unavailability periods
             Route::prefix('professionals/{professional}/unavailability')->group(function () {

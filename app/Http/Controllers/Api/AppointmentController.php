@@ -7,12 +7,14 @@ use App\Models\Appointment;
 use App\Models\Message;
 use App\Models\Patient;
 use App\Models\Professional;
+use App\Models\UnavailabilityPeriod;
+use Carbon\Carbon;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 
 /**
  * Controller for managing appointments (agenda).
- * 
+ *
  * Intenção: Centralizar o CRUD de agendamentos, incluindo busca de pacientes
  * por nome e listagem de datas indisponíveis dos profissionais para o calendário.
  */
@@ -23,17 +25,22 @@ class AppointmentController extends Controller
      */
     public function index(Request $request): JsonResponse
     {
-        $query = Appointment::with(['patient:id,full_name', 'professional:id,full_name,specialty']);
+        $query = Appointment::with([
+            'patient:id,full_name',
+            'professional:id,full_name,specialty',
+            'location:id,name',
+        ]);
 
         if ($request->filled('professional_id')) {
             $query->where('professional_id', $request->professional_id);
         }
 
         if ($request->filled('date')) {
-            $query->whereDate('appointment_date', $request->date);
+            $query->whereDate('date', $request->date);
         }
 
-        $appointments = $query->orderBy('appointment_date', 'desc')
+        $appointments = $query->orderBy('date', 'desc')
+            ->orderBy('time', 'desc')
             ->paginate($request->get('per_page', 50));
 
         return response()->json(['data' => $appointments]);
@@ -101,7 +108,7 @@ class AppointmentController extends Controller
      */
     public function allUnavailableDates(): JsonResponse
     {
-        $periods = \App\Models\UnavailabilityPeriod::with('professional:id,full_name')
+        $periods = UnavailabilityPeriod::with('professional:id,full_name')
             ->where('end_date', '>=', now()->subDay())
             ->get();
 
@@ -130,7 +137,9 @@ class AppointmentController extends Controller
         $validated = $request->validate([
             'patient_id' => ['required', 'exists:patients,id'],
             'professional_id' => ['required', 'exists:professionals,id'],
-            'appointment_date' => ['required', 'date', 'after:now'],
+            'location_id' => ['required', 'exists:locations,id'],
+            'date' => ['required', 'date'],
+            'time' => ['required', 'date_format:H:i'],
             'notes' => ['nullable', 'string', 'max:1000'],
             'is_return' => ['boolean'],
             'original_appointment_id' => ['nullable', 'exists:appointments,id'],
@@ -139,28 +148,32 @@ class AppointmentController extends Controller
         $appointment = Appointment::create($validated);
 
         // Carrega relacionamentos para montar a mensagem
-        $appointment->load(['patient:id,full_name', 'professional:id,full_name,specialty,user_id']);
+        $appointment->load(['patient:id,full_name', 'professional:id,full_name,specialty,user_id', 'location:id,name']);
 
         // Gera mensagem automática para o profissional avisando sobre o agendamento
         if ($appointment->professional && $appointment->professional->user_id) {
             $patientName = $appointment->patient?->full_name ?? 'Paciente';
-            $formattedDate = $appointment->appointment_date->format('d/m/Y \à\s H:i');
+            $locationName = $appointment->location?->name ?? 'Local não informado';
+            $formattedDate = Carbon::parse($appointment->date)->format('d/m/Y');
+            $formattedTime = $appointment->time;
 
             Message::create([
                 'sender_id' => $request->user()->id,
                 'recipient_id' => $appointment->professional->user_id,
                 'subject' => 'Novo agendamento',
-                'body' => "Olá! Um novo agendamento foi marcado:\n\n" .
-                    "Paciente: {$patientName}\n" .
-                    "Data: {$formattedDate}\n" .
-                    ($appointment->notes ? "Observações: {$appointment->notes}\n" : '') .
+                'body' => "Olá! Um novo agendamento foi marcado:\n\n".
+                    "Paciente: {$patientName}\n".
+                    "Data: {$formattedDate}\n".
+                    "Horário: {$formattedTime}\n".
+                    "Local: {$locationName}\n".
+                    ($appointment->notes ? "Observações: {$appointment->notes}\n" : '').
                     ($appointment->is_return ? "Tipo: Retorno\n" : "Tipo: Consulta inicial\n"),
             ]);
         }
 
         return response()->json([
             'message' => 'Agendamento realizado com sucesso!',
-            'data' => $appointment->load(['patient:id,full_name', 'professional:id,full_name,specialty']),
+            'data' => $appointment->load(['patient:id,full_name', 'professional:id,full_name,specialty', 'location:id,name']),
         ], 201);
     }
 
@@ -170,7 +183,7 @@ class AppointmentController extends Controller
     public function show(Appointment $appointment): JsonResponse
     {
         return response()->json([
-            'data' => $appointment->load(['patient', 'professional']),
+            'data' => $appointment->load(['patient', 'professional', 'location']),
         ]);
     }
 
@@ -180,7 +193,9 @@ class AppointmentController extends Controller
     public function update(Request $request, Appointment $appointment): JsonResponse
     {
         $validated = $request->validate([
-            'appointment_date' => ['sometimes', 'date', 'after:now'],
+            'location_id' => ['sometimes', 'exists:locations,id'],
+            'date' => ['sometimes', 'date'],
+            'time' => ['sometimes', 'date_format:H:i'],
             'notes' => ['nullable', 'string', 'max:1000'],
             'is_paid' => ['boolean'],
             'payment_method' => ['nullable', 'string', 'max:50'],
@@ -191,7 +206,7 @@ class AppointmentController extends Controller
 
         return response()->json([
             'message' => 'Agendamento atualizado com sucesso!',
-            'data' => $appointment->fresh()->load(['patient:id,full_name', 'professional:id,full_name,specialty']),
+            'data' => $appointment->fresh()->load(['patient:id,full_name', 'professional:id,full_name,specialty', 'location:id,name']),
         ]);
     }
 
@@ -212,7 +227,7 @@ class AppointmentController extends Controller
      */
     public function pendingCount(): JsonResponse
     {
-        $count = Appointment::where('appointment_date', '>=', now()->startOfDay())
+        $count = Appointment::where('date', '>=', now()->startOfDay())
             ->where('is_paid', false)
             ->count();
 

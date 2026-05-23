@@ -24,6 +24,8 @@ class Patient extends Model
         'state',
         'zip_code',
         'clinical_history',
+        'phone1',
+        'phone2',
     ];
 
     /**
@@ -37,7 +39,7 @@ class Patient extends Model
     public function getCpfMaskedAttribute(): ?string
     {
         return $this->cpf_hash
-            ? '***.***.***-' . substr($this->cpf_hash, -3)
+            ? '***.***.***-'.substr($this->cpf_hash, -3)
             : null;
     }
 
@@ -48,7 +50,6 @@ class Patient extends Model
     {
         return $this->date_of_birth;
     }
-
 
     /**
      * User account relationship.
