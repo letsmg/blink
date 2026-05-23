@@ -85,7 +85,23 @@ class GeolocationService
         }
 
         try {
+            // Tenta file_get_contents primeiro (mais comum em ambientes compartilhados)
             $response = @file_get_contents("http://ip-api.com/json/{$ip}?fields=status,country,regionName,city,lat,lon");
+
+            // Fallback para cURL se file_get_contents falhar
+            if (! $response && function_exists('curl_init')) {
+                $ch = curl_init();
+                curl_setopt_array($ch, [
+                    CURLOPT_URL => "http://ip-api.com/json/{$ip}?fields=status,country,regionName,city,lat,lon",
+                    CURLOPT_RETURNTRANSFER => true,
+                    CURLOPT_TIMEOUT => 5,
+                    CURLOPT_CONNECTTIMEOUT => 3,
+                    CURLOPT_FOLLOWLOCATION => true,
+                ]);
+                $response = curl_exec($ch);
+                curl_close($ch);
+            }
+
             if ($response) {
                 $data = json_decode($response, true);
                 if ($data && ($data['status'] ?? '') === 'success') {
