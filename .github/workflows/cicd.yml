@@ -46,7 +46,7 @@ jobs:
           cp .env.production build-tmp/.env 2>/dev/null || true
 
           # Remove o link de desenvolvimento gerado localmente (evita conflito no servidor)
-          rm -f build-tmp/public/storage
+          rm -rf build-tmp/public/storage
           rm -f build-tmp/public/hot
 
           # Compacta o pacote limpo
