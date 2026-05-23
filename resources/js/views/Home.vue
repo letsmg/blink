@@ -5,7 +5,7 @@
       <!-- Background Image -->
       <div
         class="absolute inset-0 bg-cover bg-center bg-no-repeat"
-        style="background-image: url('/storage/fundo2.png');"
+        style="background-image: url('/fundo2.png');"
       ></div>
       <!-- Overlay escuro para melhor legibilidade do texto -->
       <div class="absolute inset-0 bg-gradient-to-r from-black/70 via-black/50 to-black/60"></div>

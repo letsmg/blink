@@ -1,6 +1,6 @@
 <template>
   <div class="min-h-screen bg-gradient-to-br from-emerald-50/80 to-teal-50/80 flex items-center justify-center p-4 relative"
-    style="background-image: url('/storage/fundo.png'); background-size: cover; background-position: center; background-blend-mode: overlay;">
+    style="background-image: url('/fundo.png'); background-size: cover; background-position: center; background-blend-mode: overlay;">
     <div class="bg-white rounded-2xl shadow-xl w-full max-w-4xl overflow-hidden flex flex-col md:flex-row">
       <!-- Left: Login Form -->
       <div class="p-8 md:p-10 flex-1">
