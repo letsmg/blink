@@ -40,7 +40,7 @@ class TermController extends Controller
 
         // Coleta geolocalização via backend (GeoIP) APENAS no momento do aceite
         // Usa o IP do visitante para resolver localização aproximada
-        $geoData = $this->geolocationService->locate($request->ip());
+        $geoData = $this->geolocationService->getGeoLocation($request->ip());
 
         // Registra o aceite na tabela term_acceptances
         $acceptance = TermAcceptance::create([
