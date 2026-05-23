@@ -4,6 +4,8 @@
     <component :is="layout">
       <router-view />
     </component>
+    <!-- Banner de aceite de termos (exibido globalmente para visitantes) -->
+    <TermsBanner />
   </div>
 </template>
 
@@ -12,6 +14,7 @@ import { computed } from 'vue'
 import { useRoute } from 'vue-router'
 import PublicLayout from './layouts/PublicLayout.vue'
 import AuthLayout from './layouts/AuthLayout.vue'
+import TermsBanner from './components/TermsBanner.vue'
 
 const route = useRoute()
 
@@ -23,3 +26,5 @@ const layout = computed(() => {
   return PublicLayout
 })
 </script>
+
+

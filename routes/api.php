@@ -6,6 +6,7 @@ use App\Http\Controllers\Api\MessageController;
 use App\Http\Controllers\Api\PatientController;
 use App\Http\Controllers\Api\ProfessionalController;
 use App\Http\Controllers\Api\ReportsController;
+use App\Http\Controllers\Api\TermController;
 use App\Http\Controllers\Api\UnavailabilityPeriodController;
 use App\Http\Controllers\Api\UserController;
 use App\Http\Middleware\CheckUserRole;
@@ -27,6 +28,10 @@ use Illuminate\Support\Facades\Route;
 Route::post('/register', [AuthController::class, 'register']);
 Route::post('/login', [AuthController::class, 'login']);
 
+// Terms acceptance (public - for non-authenticated visitors)
+Route::post('/accept-terms', [TermController::class, 'accept']);
+Route::get('/check-terms', [TermController::class, 'check']);
+
 // =============================================
 // Authenticated Routes
 // =============================================
@@ -43,7 +48,18 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::middleware(CheckUserRole::class.':patient')
         ->prefix('patient')
         ->group(function () {
-            // Patient-specific routes will be added here
+            // List professionals for messaging
+            Route::get('/professionals', [PatientController::class, 'professionals']);
+
+            // Send message to a professional
+            Route::post('/messages', [PatientController::class, 'sendMessage']);
+
+            // Profile management
+            Route::get('/profile', [PatientController::class, 'profile']);
+            Route::put('/profile', [PatientController::class, 'updateProfile']);
+
+            // Account deactivation request
+            Route::post('/deactivate-request', [PatientController::class, 'deactivateRequest']);
         });
 
     // =============================================

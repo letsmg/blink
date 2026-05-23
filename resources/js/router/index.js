@@ -2,7 +2,12 @@ import { createRouter, createWebHistory } from 'vue-router';
 import Home from '../views/Home.vue';
 import Login from '../views/Login.vue';
 import Register from '../views/Register.vue';
+import TermsOfUse from '../views/TermsOfUse.vue';
+import PrivacyPolicy from '../views/PrivacyPolicy.vue';
 import PatientDashboard from '../views/patient/Dashboard.vue';
+import PatientMessages from '../views/patient/Messages.vue';
+import PatientEditProfile from '../views/patient/EditProfile.vue';
+import PatientDeactivateAccount from '../views/patient/DeactivateAccount.vue';
 import StaffDashboard from '../views/staff/Dashboard.vue';
 import StaffPatients from '../views/staff/Patients.vue';
 import StaffPatientDetail from '../views/staff/PatientDetail.vue';
@@ -18,7 +23,12 @@ const routes = [
     { path: '/', name: 'Home', component: Home, meta: { guest: true } },
     { path: '/login', name: 'Login', component: Login, meta: { guest: true } },
     { path: '/register', name: 'Register', component: Register, meta: { guest: true } },
+    { path: '/terms-of-use', name: 'TermsOfUse', component: TermsOfUse, meta: { guest: true } },
+    { path: '/privacy-policy', name: 'PrivacyPolicy', component: PrivacyPolicy, meta: { guest: true } },
     { path: '/patient/dashboard', name: 'PatientDashboard', component: PatientDashboard, meta: { requiresAuth: true, role: 'patient' } },
+    { path: '/patient/messages', name: 'PatientMessages', component: PatientMessages, meta: { requiresAuth: true, role: 'patient' } },
+    { path: '/patient/edit-profile', name: 'PatientEditProfile', component: PatientEditProfile, meta: { requiresAuth: true, role: 'patient' } },
+    { path: '/patient/deactivate-account', name: 'PatientDeactivateAccount', component: PatientDeactivateAccount, meta: { requiresAuth: true, role: 'patient' } },
     { path: '/staff/dashboard', name: 'StaffDashboard', component: StaffDashboard, meta: { requiresAuth: true, role: 'staff' } },
     { path: '/staff/patients', name: 'StaffPatients', component: StaffPatients, meta: { requiresAuth: true, role: 'staff' } },
     { path: '/staff/patients/new', name: 'StaffPatientNew', component: StaffPatientForm, meta: { requiresAuth: true, role: 'staff' } },

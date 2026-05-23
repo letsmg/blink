@@ -10,6 +10,7 @@ use App\Models\Message;
 use App\Models\Patient;
 use App\Models\Professional;
 use App\Models\Report;
+use App\Models\TermAcceptance;
 use App\Models\UnavailabilityPeriod;
 use App\Models\User;
 use App\Services\CpfEncryptionService;
@@ -47,7 +48,31 @@ class DatabaseSeeder extends Seeder
             'role' => UserRole::Patient,
         ]);
 
+        // ─── TERM ACCEPTANCES (Seed users automatically accept terms) ──
+        // Registra o aceite dos termos para todos os usuários seed no banco de dados.
+        // Isso garante que após um migrate:fresh --seed, os usuários já tenham
+        // o aceite registrado (não fica apenas em cookies/sessão).
+        $allSeedUsers = User::all();
+        foreach ($allSeedUsers as $seedUser) {
+            $seedUser->update([
+                'terms_accepted' => true,
+                'terms_accepted_at' => now(),
+            ]);
+
+            TermAcceptance::create([
+                'user_id' => $seedUser->id,
+                'term_type' => 'both',
+                'ip_address' => '127.0.0.1',
+                'country' => 'Brasil',
+                'region' => 'São Paulo',
+                'city' => 'Ambiente de Desenvolvimento',
+                'user_agent' => 'Seeder/1.0',
+                'terms_version' => '1.0',
+            ]);
+        }
+
         // ─── PROFESSIONALS ───────────────────────────────────────
+
         $specialties = [
             'Cardiologia', 'Dermatologia', 'Ortopedia', 'Pediatria',
             'Neurologia', 'Ginecologia', 'Oftalmologia', 'Psiquiatria',

@@ -1,13 +1,17 @@
 <?php
 
+use App\Http\Middleware\CheckTermsAccepted;
+use App\Http\Middleware\CheckTokenExpiration;
 use App\Http\Middleware\CheckUserRole;
 use App\Http\Middleware\InjectTokenFromCookie;
+use App\Http\Middleware\SanitizeInput;
 use App\Http\Middleware\SetTokenCookie;
 use Illuminate\Auth\AuthenticationException;
 use Illuminate\Foundation\Application;
 use Illuminate\Foundation\Configuration\Exceptions;
 use Illuminate\Foundation\Configuration\Middleware;
 use Illuminate\Http\Request;
+use Laravel\Sanctum\Http\Middleware\EnsureFrontendRequestsAreStateful;
 
 return Application::configure(basePath: dirname(__DIR__))
     ->withRouting(
@@ -17,9 +21,10 @@ return Application::configure(basePath: dirname(__DIR__))
         health: '/up',
     )
     ->withMiddleware(function (Middleware $middleware): void {
-        // Register role-based access control middleware alias
+        // Register middleware aliases
         $middleware->alias([
             'role' => CheckUserRole::class,
+            'terms.accepted' => CheckTermsAccepted::class,
         ]);
 
         // Inject token from HttpOnly cookie into Authorization header
@@ -31,18 +36,17 @@ return Application::configure(basePath: dirname(__DIR__))
 
         // Check token expiration for authenticated routes
         $middleware->appendToGroup('api', [
-            \App\Http\Middleware\CheckTokenExpiration::class,
+            CheckTokenExpiration::class,
         ]);
 
         // Global sanitization middleware for all non-GET requests
         $middleware->prependToGroup('api', [
-            \App\Http\Middleware\SanitizeInput::class,
+            SanitizeInput::class,
         ]);
-
 
         // API middleware group with Sanctum
         $middleware->api(prepend: [
-            \Laravel\Sanctum\Http\Middleware\EnsureFrontendRequestsAreStateful::class,
+            EnsureFrontendRequestsAreStateful::class,
         ]);
 
         // Set token as HttpOnly cookie on login/register responses
@@ -66,4 +70,3 @@ return Application::configure(basePath: dirname(__DIR__))
             return redirect()->to('/login');
         });
     })->create();
-

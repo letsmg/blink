@@ -40,8 +40,63 @@
           Dashboard
         </router-link>
 
+        <!-- Patient links -->
+        <template v-if="!isStaff">
+          <router-link
+            to="/patient/messages"
+            class="flex items-center gap-3 px-4 py-2.5 rounded-lg text-sm font-medium transition-colors"
+            :class="isActive('/patient/messages') ? 'bg-emerald-50 text-emerald-700' : 'text-gray-600 hover:bg-gray-100'"
+            @click="isMobile && (isSidebarOpen = false)"
+          >
+            <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path
+                stroke-linecap="round"
+                stroke-linejoin="round"
+                stroke-width="2"
+                d="M8 10h.01M12 10h.01M16 10h.01M9 16H5a2 2 0 01-2-2V6a2 2 0 012-2h14a2 2 0 012 2v8a2 2 0 01-2 2h-5l-5 5v-5z"
+              />
+            </svg>
+            Solicitar Consulta
+          </router-link>
+
+          <router-link
+            to="/patient/edit-profile"
+            class="flex items-center gap-3 px-4 py-2.5 rounded-lg text-sm font-medium transition-colors"
+            :class="isActive('/patient/edit-profile') ? 'bg-emerald-50 text-emerald-700' : 'text-gray-600 hover:bg-gray-100'"
+            @click="isMobile && (isSidebarOpen = false)"
+          >
+            <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path
+                stroke-linecap="round"
+                stroke-linejoin="round"
+                stroke-width="2"
+                d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z"
+              />
+            </svg>
+            Editar Perfil
+          </router-link>
+
+          <router-link
+            to="/patient/deactivate-account"
+            class="flex items-center gap-3 px-4 py-2.5 rounded-lg text-sm font-medium transition-colors"
+            :class="isActive('/patient/deactivate-account') ? 'bg-red-50 text-red-700' : 'text-gray-600 hover:bg-gray-100'"
+            @click="isMobile && (isSidebarOpen = false)"
+          >
+            <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path
+                stroke-linecap="round"
+                stroke-linejoin="round"
+                stroke-width="2"
+                d="M18.364 18.364A9 9 0 005.636 5.636m12.728 12.728A9 9 0 015.636 5.636m12.728 12.728L5.636 5.636"
+              />
+            </svg>
+            Desativar Conta
+          </router-link>
+        </template>
+
         <!-- Staff-only links -->
         <template v-if="isStaff">
+
           <router-link
             to="/staff/patients"
             class="flex items-center gap-3 px-4 py-2.5 rounded-lg text-sm font-medium transition-colors"

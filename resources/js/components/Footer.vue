@@ -60,9 +60,10 @@
           &copy; {{ year }} Blink. Todos os direitos reservados.
         </p>
         <div class="flex items-center gap-4 text-sm text-gray-500">
-          <a href="#" class="hover:text-emerald-400 transition-colors">Termos de Uso</a>
-          <a href="#" class="hover:text-emerald-400 transition-colors">Privacidade</a>
+          <router-link to="/terms-of-use" class="hover:text-emerald-400 transition-colors">Termos de Uso</router-link>
+          <router-link to="/privacy-policy" class="hover:text-emerald-400 transition-colors">Privacidade</router-link>
         </div>
+
       </div>
     </div>
   </footer>

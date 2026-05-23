@@ -2,9 +2,16 @@
   <div class="min-h-screen bg-gradient-to-br from-emerald-50 to-teal-50 flex items-center justify-center p-4">
     <div class="bg-white rounded-2xl shadow-xl w-full max-w-lg p-8 md:p-10">
       <div class="mb-8">
+        <router-link to="/" class="inline-flex items-center gap-1.5 text-sm text-gray-500 hover:text-emerald-600 transition-colors mb-4">
+          <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 19l-7-7m0 0l7-7m-7 7h18" />
+          </svg>
+          Voltar
+        </router-link>
         <h1 class="text-2xl font-bold text-gray-900">Criar Conta</h1>
         <p class="text-gray-500 mt-1">Cadastre-se como paciente</p>
       </div>
+
 
       <form @submit.prevent="handleRegister" class="space-y-4">
         <div>
@@ -41,12 +48,13 @@
           <div>
             <label class="block text-sm font-medium text-gray-700 mb-1">Data de Nascimento</label>
             <input
-              v-model="form.birth_date"
+              v-model="form.date_of_birth"
               type="date"
               required
               class="w-full px-4 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500 outline-none transition-colors"
             />
           </div>
+
         </div>
 
         <div>
@@ -181,7 +189,7 @@ const form = ref({
   name: '',
   email: '',
   cpf: '',
-  birth_date: '',
+  date_of_birth: '',
   phone: '',
   street: '',
   neighborhood: '',
@@ -196,7 +204,7 @@ function fillTestData() {
   form.value.name = data.name
   form.value.email = data.email
   form.value.cpf = data.cpf
-  form.value.birth_date = data.birth_date
+  form.value.date_of_birth = data.birth_date
   form.value.phone = data.phone
   form.value.street = data.street
   form.value.neighborhood = data.neighborhood
@@ -212,7 +220,7 @@ function clearForm() {
     name: '',
     email: '',
     cpf: '',
-    birth_date: '',
+    date_of_birth: '',
     phone: '',
     street: '',
     neighborhood: '',
@@ -223,6 +231,7 @@ function clearForm() {
   }
   error.value = ''
 }
+
 
 async function handleRegister() {
   loading.value = true
