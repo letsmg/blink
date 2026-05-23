@@ -128,9 +128,10 @@ onMounted(async () => {
   // Visitante não logado: verifica se já aceitou os termos
   try {
     const visitorId = getVisitorId()
-    const { data } = await axios.get('/api/check-terms', {
+    const { data } = await axios.get('/check-terms', {
       params: { visitor_uuid: visitorId },
     })
+
     show.value = !data.accepted
   } catch {
     // Em caso de erro, exibe o modal por segurança
@@ -144,11 +145,12 @@ async function acceptTerms() {
   try {
     const visitorId = getVisitorId()
 
-    await axios.post('/api/accept-terms', {
+    await axios.post('/accept-terms', {
       term_type: 'both',
       terms_version: CURRENT_TERMS_VERSION,
       visitor_uuid: visitorId,
     })
+
 
     // Atualiza o user no localStorage se estiver logado
     const user = localStorage.getItem('user')
