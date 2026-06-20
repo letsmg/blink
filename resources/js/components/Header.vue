@@ -22,25 +22,45 @@
             class="text-sm font-medium text-emerald-100 hover:text-white transition-colors relative after:absolute after:bottom-0 after:left-0 after:h-0.5 after:w-0 after:bg-emerald-300 after:transition-all hover:after:w-full"
             exact
           >
-            Início
+            {{ ui.nav.home }}
           </router-link>
           <a
             href="#recursos"
             class="text-sm font-medium text-emerald-100 hover:text-white transition-colors relative after:absolute after:bottom-0 after:left-0 after:h-0.5 after:w-0 after:bg-emerald-300 after:transition-all hover:after:w-full"
           >
-            Recursos
+            {{ ui.nav.features }}
           </a>
+
+          <!-- Language Selector -->
+          <div class="flex items-center gap-1.5">
+            <span class="text-[10px] text-emerald-300 uppercase tracking-[0.15em] font-medium">{{ ui.nav.current_language }}</span>
+            <select
+              v-model="currentLocale"
+              @change="handleLocaleChange"
+              class="rounded-lg border border-emerald-500/30 bg-emerald-700/50 text-emerald-100 px-2 py-1.5 text-[11px] font-bold uppercase tracking-[0.15em] focus:outline-none focus:ring-2 focus:ring-emerald-400 cursor-pointer hover:bg-emerald-600/50 transition-colors"
+            >
+              <option
+                v-for="language in supportedLanguages"
+                :key="language.code"
+                :value="language.code"
+                class="bg-emerald-800 text-emerald-100"
+              >
+                {{ language.label }}
+              </option>
+            </select>
+          </div>
+
           <router-link
             to="/login"
             class="text-sm font-medium text-emerald-100 hover:text-white transition-colors"
           >
-            Entrar
+            {{ ui.nav.login }}
           </router-link>
           <router-link
             to="/register"
             class="text-sm font-medium px-5 py-2.5 bg-white text-emerald-700 rounded-xl hover:bg-emerald-50 transition-all shadow-md hover:shadow-lg"
           >
-            Cadastre-se
+            {{ ui.nav.register }}
           </router-link>
         </nav>
 
@@ -82,7 +102,7 @@
               <svg class="w-5 h-5 text-emerald-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 12l2-2m0 0l7-7 7 7M5 10v10a1 1 0 001 1h3m10-11l2 2m-2-2v10a1 1 0 01-1 1h-3m-6 0a1 1 0 001-1v-4a1 1 0 011-1h2a1 1 0 011 1v4a1 1 0 001 1m-6 0h6" />
               </svg>
-              Início
+              {{ ui.nav.home }}
             </div>
           </router-link>
           <a
@@ -94,9 +114,30 @@
               <svg class="w-5 h-5 text-emerald-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2H6a2 2 0 01-2-2V6zM14 6a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2h-2a2 2 0 01-2-2V6zM4 16a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2H6a2 2 0 01-2-2v-2zM14 16a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2h-2a2 2 0 01-2-2v-2z" />
               </svg>
-              Recursos
+              {{ ui.nav.features }}
             </div>
           </a>
+
+          <!-- Mobile Language Selector -->
+          <div class="px-4 py-3 border-t border-emerald-100 mt-2">
+            <div class="flex items-center justify-between">
+              <span class="text-xs font-medium text-gray-500 uppercase tracking-wider">{{ ui.nav.current_language }}</span>
+              <select
+                v-model="currentLocale"
+                @change="handleLocaleChange"
+                class="rounded-lg border border-gray-200 bg-white text-gray-700 px-2 py-1.5 text-xs font-medium focus:outline-none focus:ring-2 focus:ring-emerald-400 cursor-pointer"
+              >
+                <option
+                  v-for="language in supportedLanguages"
+                  :key="language.code"
+                  :value="language.code"
+                >
+                  {{ language.label }}
+                </option>
+              </select>
+            </div>
+          </div>
+
           <div class="border-t border-emerald-100 pt-2 mt-2">
             <router-link
               to="/login"
@@ -107,7 +148,7 @@
                 <svg class="w-5 h-5 text-emerald-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 16l-4-4m0 0l4-4m-4 4h14m-5 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h7a3 3 0 013 3v1" />
                 </svg>
-                Entrar
+                {{ ui.nav.login }}
               </div>
             </router-link>
             <router-link
@@ -115,7 +156,7 @@
               class="block px-4 py-3 mt-1 text-sm font-medium text-white bg-gradient-to-r from-emerald-600 to-teal-600 rounded-xl hover:from-emerald-700 hover:to-teal-700 transition-all text-center"
               @click="mobileOpen = false"
             >
-              Cadastre-se
+              {{ ui.nav.register }}
             </router-link>
           </div>
         </div>
@@ -126,11 +167,18 @@
 
 <script setup lang="ts">
 import { ref } from 'vue'
+import { useI18n } from '../composables/useI18n'
 
 /**
  * Header público - navegação responsiva com tema hospitalar/saúde.
  * Usado em páginas não autenticadas (Home, Login, Register).
- * Inclui menu mobile com animação de transição.
+ * Inclui menu mobile com animação de transição e seletor de idioma.
  */
 const mobileOpen = ref(false)
+
+const { ui, currentLocale, supportedLanguages, changeLocale } = useI18n()
+
+function handleLocaleChange() {
+  changeLocale(currentLocale.value)
+}
 </script>

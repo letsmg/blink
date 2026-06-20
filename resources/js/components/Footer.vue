@@ -24,13 +24,13 @@
           <h3 class="text-sm font-semibold text-white uppercase tracking-wider mb-4">Links</h3>
           <ul class="space-y-2">
             <li>
-              <router-link to="/" class="text-sm text-gray-400 hover:text-emerald-400 transition-colors">Início</router-link>
+              <router-link to="/" class="text-sm text-gray-400 hover:text-emerald-400 transition-colors">{{ ui.nav.home }}</router-link>
             </li>
             <li>
-              <router-link to="/login" class="text-sm text-gray-400 hover:text-emerald-400 transition-colors">Entrar</router-link>
+              <router-link to="/login" class="text-sm text-gray-400 hover:text-emerald-400 transition-colors">{{ ui.nav.login }}</router-link>
             </li>
             <li>
-              <router-link to="/register" class="text-sm text-gray-400 hover:text-emerald-400 transition-colors">Cadastre-se</router-link>
+              <router-link to="/register" class="text-sm text-gray-400 hover:text-emerald-400 transition-colors">{{ ui.nav.register }}</router-link>
             </li>
           </ul>
         </div>
@@ -57,11 +57,11 @@
 
       <div class="border-t border-gray-800 pt-8 flex flex-col sm:flex-row items-center justify-between gap-4">
         <p class="text-sm text-gray-500">
-          &copy; {{ year }} Blink. Todos os direitos reservados.
+          {{ ui.footer.copyright.replace(':year', String(year)) }}
         </p>
         <div class="flex items-center gap-4 text-sm text-gray-500">
-          <router-link to="/terms-of-use" class="hover:text-emerald-400 transition-colors">Termos de Uso</router-link>
-          <router-link to="/privacy-policy" class="hover:text-emerald-400 transition-colors">Privacidade</router-link>
+          <router-link to="/terms-of-use" class="hover:text-emerald-400 transition-colors">{{ ui.footer.terms }}</router-link>
+          <router-link to="/privacy-policy" class="hover:text-emerald-400 transition-colors">{{ ui.footer.privacy }}</router-link>
         </div>
 
       </div>
@@ -73,6 +73,10 @@
 /**
  * Footer público - rodapé com tema hospitalar/saúde.
  * Usado em páginas não autenticadas (Home, Login, Register).
+ * Suporte a internacionalização (pt, en, es).
  */
+import { useI18n } from '../composables/useI18n'
+
+const { ui } = useI18n()
 const year = new Date().getFullYear()
 </script>
