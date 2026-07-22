@@ -26,7 +26,8 @@ class AppointmentController extends Controller
     public function index(Request $request): JsonResponse
     {
         $query = Appointment::with([
-            'patient:id,full_name',
+            'patient:id,user_id',
+            'patient.user:id,display_name',
             'professional:id,full_name,specialty',
             'location:id,name',
         ]);
@@ -53,9 +54,11 @@ class AppointmentController extends Controller
     {
         $term = $request->get('q', '');
 
-        $patients = Patient::where('full_name', 'ilike', "%{$term}%")
-            ->select('id', 'full_name')
-            ->orderBy('full_name')
+        // Busca por display_name no relacionamento users (full_name foi removido da tabela patients)
+        $patients = Patient::join('users', 'patients.user_id', '=', 'users.id')
+            ->where('users.display_name', 'ilike', "%{$term}%")
+            ->select('patients.id', 'users.display_name as full_name')
+            ->orderBy('users.display_name')
             ->limit(20)
             ->get();
 
@@ -148,7 +151,7 @@ class AppointmentController extends Controller
         $appointment = Appointment::create($validated);
 
         // Carrega relacionamentos para montar a mensagem
-        $appointment->load(['patient:id,full_name', 'professional:id,full_name,specialty,user_id', 'location:id,name']);
+        $appointment->load(['patient:id,user_id', 'patient.user:id,display_name', 'professional:id,full_name,specialty,user_id', 'location:id,name']);
 
         // Gera mensagem automática para o profissional avisando sobre o agendamento
         if ($appointment->professional && $appointment->professional->user_id) {
@@ -173,7 +176,7 @@ class AppointmentController extends Controller
 
         return response()->json([
             'message' => 'Agendamento realizado com sucesso!',
-            'data' => $appointment->load(['patient:id,full_name', 'professional:id,full_name,specialty', 'location:id,name']),
+            'data' => $appointment->load(['patient:id,user_id', 'patient.user:id,display_name', 'professional:id,full_name,specialty', 'location:id,name']),
         ], 201);
     }
 
@@ -206,7 +209,7 @@ class AppointmentController extends Controller
 
         return response()->json([
             'message' => 'Agendamento atualizado com sucesso!',
-            'data' => $appointment->fresh()->load(['patient:id,full_name', 'professional:id,full_name,specialty', 'location:id,name']),
+            'data' => $appointment->fresh()->load(['patient:id,user_id', 'patient.user:id,display_name', 'professional:id,full_name,specialty', 'location:id,name']),
         ]);
     }
 

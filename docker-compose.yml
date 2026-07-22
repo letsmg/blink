@@ -1,0 +1,98 @@
+version: '3.8'
+
+services:
+  # =============================================
+  # PostgreSQL - Banco de dados principal
+  # =============================================
+  pgsql:
+    image: postgres:16-alpine
+    container_name: blink_pgsql
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: blink_db
+      POSTGRES_USER: blink_user
+      POSTGRES_PASSWORD: "SH#jzN54$gTt7N*1"
+    ports:
+      - "5432:5432"
+    volumes:
+      - pgsql_data:/var/lib/postgresql/data
+    networks:
+      - blink_network
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U blink_user -d blink_db"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+  # =============================================
+  # Redis - Cache, filas e sessões
+  # =============================================
+  redis:
+    image: redis:7-alpine
+    container_name: blink_redis
+    restart: unless-stopped
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis_data:/data
+    networks:
+      - blink_network
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 5
+
+  # =============================================
+  # Aplicação Laravel (desenvolvimento)
+  # =============================================
+  app:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: blink_app
+    restart: unless-stopped
+    working_dir: /var/www/blink
+    volumes:
+      - .:/var/www/blink
+      - app_storage:/var/www/blink/storage
+    ports:
+      - "8000:8000"
+    environment:
+      APP_NAME: Blink
+      APP_ENV: local
+      APP_KEY: base64:CugRpS7G1+GHaukOeW8U5E0wscyANIlOhQSIlZF5fBY=
+      APP_DEBUG: "true"
+      APP_URL: http://localhost:8000
+      DB_CONNECTION: pgsql
+      DB_HOST: pgsql
+      DB_PORT: 5432
+      DB_DATABASE: blink_db
+      DB_USERNAME: blink_user
+      DB_PASSWORD: "SH#jzN54$gTt7N*1"
+      REDIS_HOST: redis
+      REDIS_PORT: 6379
+      CACHE_STORE: redis
+      QUEUE_CONNECTION: redis
+      SESSION_DRIVER: redis
+    depends_on:
+      pgsql:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    networks:
+      - blink_network
+    command: >
+      sh -c "
+        php artisan migrate:fresh --seed --force &&
+        php artisan serve --host=0.0.0.0 --port=8000
+      "
+
+volumes:
+  pgsql_data:
+  redis_data:
+  app_storage:
+
+networks:
+  blink_network:
+    driver: bridge

@@ -44,7 +44,7 @@ class PatientRegistrationTest extends TestCase
         $response->assertStatus(201)
             ->assertJsonStructure([
                 'message',
-                'user' => ['id', 'name', 'email', 'role'],
+                'user' => ['id', 'display_name', 'email', 'role'],
                 'token',
             ]);
 

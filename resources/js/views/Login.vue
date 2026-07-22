@@ -88,10 +88,10 @@
 </template>
 
 <script setup lang="ts">
-import { ref, onMounted } from 'vue'
-import { useRouter } from 'vue-router'
+import { ref, computed, onMounted } from 'vue'
+import { useRouter, useRoute } from 'vue-router'
 import axios from 'axios'
-import { testUsers, type TestUser } from '../utils/formHelpers'
+import { testUsers as allTestUsers, type TestUser } from '../utils/formHelpers'
 import { useMeta } from '../composables/useMeta'
 
 onMounted(() => {
@@ -104,6 +104,7 @@ onMounted(() => {
 })
 
 const router = useRouter()
+const route = useRoute()
 const loading = ref(false)
 const error = ref('')
 
@@ -112,10 +113,29 @@ const form = ref({
   password: '',
 })
 
+/**
+ * Filtra usuários de teste baseado na área de login.
+ * Se area=patient, mostra apenas pacientes.
+ * Se area=staff, mostra apenas staff/profissionais.
+ */
+const testUsers = computed(() => {
+  const area = route.query.area as string | undefined
+
+  if (area === 'patient') {
+    return allTestUsers.filter(u => u.role === 'Paciente')
+  }
+  if (area === 'staff') {
+    return allTestUsers.filter(u => u.role !== 'Paciente')
+  }
+  return allTestUsers
+})
+
 function roleBadgeClass(role: string): string {
   switch (role) {
-    case 'Admin': return 'bg-purple-100 text-purple-700'
-    case 'Operacional': return 'bg-blue-100 text-blue-700'
+    case 'Admin Geral': return 'bg-purple-100 text-purple-700'
+    case 'Admin Operacional': return 'bg-blue-100 text-blue-700'
+    case 'Profissional': return 'bg-teal-100 text-teal-700'
+    case 'Paciente': return 'bg-emerald-100 text-emerald-700'
     default: return 'bg-gray-100 text-gray-600'
   }
 }
@@ -137,11 +157,11 @@ async function handleLogin() {
 
     localStorage.setItem('user', JSON.stringify(data.user))
 
-    // Redirect based on role
+    // Redirect baseado no role (1=Admin, 2=AdminOperacional, 3=Professional, 4=Patient)
     const role = data.user.role
-    if (role === 0) {
+    if (role === 4) {
       router.push('/patient/dashboard')
-    } else {
+    } else if (role >= 1 && role <= 3) {
       router.push('/staff/dashboard')
     }
   } catch (e: any) {

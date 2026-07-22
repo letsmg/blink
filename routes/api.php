@@ -1,5 +1,8 @@
 <?php
 
+use App\Http\Controllers\Api\AccountPayableController;
+use App\Http\Controllers\Api\AccountReceivableController;
+use App\Http\Controllers\Api\CepController;
 use App\Http\Controllers\Api\AppointmentController;
 use App\Http\Controllers\Api\AuthController;
 use App\Http\Controllers\Api\MessageController;
@@ -25,8 +28,14 @@ use Illuminate\Support\Facades\Route;
 // =============================================
 // Public Routes (No authentication required)
 // =============================================
-Route::post('/register', [AuthController::class, 'register']);
-Route::post('/login', [AuthController::class, 'login']);
+// Rate limiting agressivo para mitigar brute-force (clinerules §4)
+Route::middleware('throttle:auth')->group(function () {
+    Route::post('/register', [AuthController::class, 'register']);
+    Route::post('/login', [AuthController::class, 'login']);
+});
+
+// CEP lookup — público, usado em formulários com endereço
+Route::get('/cep/{cep}', [CepController::class, 'lookup']);
 
 // Terms acceptance (public - for non-authenticated visitors)
 Route::post('/accept-terms', [TermController::class, 'accept']);
@@ -119,6 +128,29 @@ Route::middleware('auth:sanctum')->group(function () {
             Route::prefix('reports')->group(function () {
                 Route::get('/patients', [ReportsController::class, 'patients']);
                 Route::get('/professionals', [ReportsController::class, 'professionals']);
+            });
+
+            // =============================================
+            // Financial Module (Accounts Payable & Receivable)
+            // =============================================
+            // Contas a Pagar
+            Route::prefix('accounts-payable')->group(function () {
+                Route::get('/', [AccountPayableController::class, 'index']);
+                Route::post('/', [AccountPayableController::class, 'store']);
+                Route::get('/totals', [AccountPayableController::class, 'totals']);
+                Route::put('/{account}', [AccountPayableController::class, 'update']);
+                Route::post('/{account}/pay', [AccountPayableController::class, 'markAsPaid']);
+                Route::delete('/{account}', [AccountPayableController::class, 'destroy']);
+            });
+
+            // Contas a Receber
+            Route::prefix('accounts-receivable')->group(function () {
+                Route::get('/', [AccountReceivableController::class, 'index']);
+                Route::post('/', [AccountReceivableController::class, 'store']);
+                Route::get('/totals', [AccountReceivableController::class, 'totals']);
+                Route::put('/{account}', [AccountReceivableController::class, 'update']);
+                Route::post('/{account}/pay', [AccountReceivableController::class, 'markAsPaid']);
+                Route::delete('/{account}', [AccountReceivableController::class, 'destroy']);
             });
         });
 

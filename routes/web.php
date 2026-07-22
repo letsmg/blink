@@ -1,4 +1,5 @@
 <?php
+// Copyright (c) 2026 Luiz Eduardo T. Silva. Todos os direitos reservados.
 
 use App\Http\Controllers\SpaController;
 use App\Http\Controllers\TranslationController;

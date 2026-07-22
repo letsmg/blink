@@ -44,8 +44,10 @@ class ReportsController extends Controller
             // Ordenar por data de nascimento (mais novo primeiro = desc, mais velho primeiro = asc)
             $query->orderBy('date_of_birth', $direction === 'asc' ? 'desc' : 'asc');
         } else {
-            // Ordenar por nome
-            $query->orderBy('full_name', $direction);
+            // Ordenar por nome — full_name foi removido da tabela patients, usa join com users.display_name
+            $query->join('users', 'patients.user_id', '=', 'users.id')
+                ->select('patients.*')
+                ->orderBy('users.display_name', $direction);
         }
 
         $patients = $query->paginate($request->get('per_page', 50));

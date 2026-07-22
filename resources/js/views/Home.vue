@@ -17,7 +17,8 @@
             <div class="relative">
               <div class="w-20 h-20 bg-gradient-to-br from-emerald-500 to-teal-600 rounded-2xl flex items-center justify-center shadow-lg shadow-emerald-200">
                 <svg class="w-10 h-10 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M4.26 10.147a60.438 60.438 0 0 0-.491 6.347A48.62 48.62 0 0 1 12 20.904a48.62 48.62 0 0 1 8.232-4.41 60.46 60.46 0 0 0-.491-6.347m-15.482 0a50.636 50.636 0 0 0-2.658-.813A59.906 59.906 0 0 1 12 3.493a59.903 59.903 0 0 1 10.399 5.84c-.896.248-1.783.52-2.658.814m-15.482 0A50.717 50.717 0 0 1 12 13.489a50.702 50.702 0 0 1 7.74-3.342" />
+                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
+                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" />
                 </svg>
               </div>
               <!-- Pulse ring -->
@@ -30,21 +31,51 @@
           <p class="text-lg sm:text-xl text-gray-200 max-w-2xl mx-auto mb-10 leading-relaxed" v-html="ui.hero.description">
           </p>
 
-          <!-- CTA Buttons -->
-          <div class="flex flex-col sm:flex-row items-center justify-center gap-4">
-            <router-link
-              to="/register"
-              class="w-full sm:w-auto px-8 py-4 bg-gradient-to-r from-emerald-600 to-teal-600 text-white font-semibold rounded-xl shadow-lg shadow-emerald-200 hover:shadow-xl hover:from-emerald-700 hover:to-teal-700 transition-all duration-300 text-center"
-            >
-              {{ ui.hero.cta }}
-              <span class="ml-2">→</span>
-            </router-link>
-            <router-link
-              to="/login"
-              class="w-full sm:w-auto px-8 py-4 bg-white text-emerald-700 font-semibold rounded-xl border-2 border-emerald-200 hover:border-emerald-400 hover:bg-emerald-50 transition-all duration-300 text-center"
-            >
-              {{ ui.hero.login }}
-            </router-link>
+          <!-- Duas portas de acesso: Pacientes e Staff/Profissionais -->
+          <div class="grid grid-cols-1 md:grid-cols-2 gap-6 max-w-2xl mx-auto">
+            <!-- Portal do Paciente -->
+            <div class="bg-white/10 backdrop-blur-md border border-white/20 rounded-2xl p-6 text-left">
+              <div class="w-12 h-12 bg-emerald-500/20 rounded-xl flex items-center justify-center mb-4">
+                <svg class="w-6 h-6 text-emerald-300" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" />
+                </svg>
+              </div>
+              <h3 class="text-white font-semibold text-lg mb-2">Sou Paciente</h3>
+              <p class="text-gray-300 text-sm mb-4">Acesse suas consultas, diagnósticos e histórico clínico.</p>
+              <div class="space-y-2">
+                <router-link
+                  to="/login?area=patient"
+                  class="block w-full px-4 py-2.5 bg-emerald-600 hover:bg-emerald-500 text-white text-center font-medium rounded-lg transition-colors"
+                >
+                  Entrar como Paciente
+                </router-link>
+                <router-link
+                  to="/register"
+                  class="block w-full px-4 py-2.5 bg-white/10 hover:bg-white/20 text-white text-center font-medium rounded-lg border border-white/30 transition-colors"
+                >
+                  Criar conta gratuita
+                </router-link>
+              </div>
+            </div>
+
+            <!-- Portal do Profissional / Staff -->
+            <div class="bg-white/10 backdrop-blur-md border border-white/20 rounded-2xl p-6 text-left">
+              <div class="w-12 h-12 bg-teal-500/20 rounded-xl flex items-center justify-center mb-4">
+                <svg class="w-6 h-6 text-teal-300" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5.121 17.804A13.937 13.937 0 0112 16c2.5 0 4.847.655 6.879 1.804M15 10a3 3 0 11-6 0 3 3 0 016 0zm6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
+                </svg>
+              </div>
+              <h3 class="text-white font-semibold text-lg mb-2">Sou Profissional</h3>
+              <p class="text-gray-300 text-sm mb-4">Área exclusiva para médicos, staff administrativo e operadores.</p>
+              <div class="space-y-2">
+                <router-link
+                  to="/login?area=staff"
+                  class="block w-full px-4 py-2.5 bg-teal-600 hover:bg-teal-500 text-white text-center font-medium rounded-lg transition-colors"
+                >
+                  Entrar como Profissional
+                </router-link>
+              </div>
+            </div>
           </div>
         </div>
       </div>
@@ -136,7 +167,7 @@
 <script setup lang="ts">
 /**
  * Home page - Landing page institucional com tema hospitalar/saúde.
- * Apresenta os recursos do sistema Blink de forma atrativa e responsiva.
+ * Duas portas de acesso: Pacientes (role=4) e Staff/Profissionais (roles 1-3).
  * Suporte a internacionalização (pt, en, es).
  */
 import { onMounted } from 'vue'
@@ -149,7 +180,6 @@ function getIconIndex(index: string | number): number {
   return Number(index) % iconBgClasses.length
 }
 
-// Ícones SVG para os cards de features
 const iconBgClasses = [
   'bg-gradient-to-br from-emerald-400 to-emerald-600',
   'bg-gradient-to-br from-teal-400 to-teal-600',
@@ -160,17 +190,11 @@ const iconBgClasses = [
 ]
 
 const iconPaths = [
-  // Agenda (calendar)
   'M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z',
-  // Pacientes (users)
   'M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z',
-  // Segurança (shield)
   'M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z',
-  // Mensagens (chat)
   'M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z',
-  // Relatórios (document)
   'M9 17v-2m3 2v-4m3 4v-6m2 10H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z',
-  // Multiplataforma (device)
   'M12 18h.01M8 21h8a2 2 0 002-2V5a2 2 0 00-2-2H8a2 2 0 00-2 2v14a2 2 0 002 2z',
 ]
 

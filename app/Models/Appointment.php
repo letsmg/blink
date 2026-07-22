@@ -22,6 +22,8 @@ class Appointment extends Model
         'paid_at',
         'is_return',
         'original_appointment_id',
+        'agreement_id',
+        'health_plan_id',
     ];
 
     protected function casts(): array
@@ -73,5 +75,21 @@ class Appointment extends Model
     public function returnAppointments()
     {
         return $this->hasMany(self::class, 'original_appointment_id');
+    }
+
+    /**
+     * Convênio utilizado neste agendamento.
+     */
+    public function agreement(): BelongsTo
+    {
+        return $this->belongsTo(Agreement::class);
+    }
+
+    /**
+     * Plano de saúde utilizado neste agendamento.
+     */
+    public function healthPlan(): BelongsTo
+    {
+        return $this->belongsTo(HealthPlan::class);
     }
 }

@@ -1,8 +1,8 @@
-name: 🚀 Deploy Blink (Direto p/ Produção)
+name: 🚀 CI/CD Deploy Atômico Blink
 
 on:
   push:
-    branches: [main]
+    branches: [hom, main]
 
 jobs:
   deploy:
@@ -36,16 +36,13 @@ jobs:
         run: |
           mkdir build-tmp
 
-          # CORREÇÃO: Incluídas as pastas 'routes' e 'bootstrap' inteiras no pacote de produção
+          # Inclui as pastas essenciais do projeto Laravel + Build do Vite
           cp -r app bootstrap config database public resources routes storage vendor build-tmp/
 
           # Copia os arquivos vitais da raiz do projeto
           cp artisan composer.json package.json build-tmp/
 
-          # Copia o .env.production como o .env oficial de produção
-          cp .env.production build-tmp/.env 2>/dev/null || true
-
-          # Remove o link de desenvolvimento gerado localmente (evita conflito no servidor)
+          # Remove o link gerado localmente para evitar conflito com o link simbólico atômico do servidor
           rm -rf build-tmp/public/storage
           rm -f build-tmp/public/hot
 
@@ -60,84 +57,110 @@ jobs:
           key: ${{ secrets.SSH_PRIVATE_KEY }}
           known_hosts: ${{ secrets.SSH_KNOWN_HOSTS }}
 
-      - name: 🚀 Transferir Pacote e Executar Comandos no Servidor
+      - name: 🚀 Transferir Pacote e Executar Deploy Atômico no Servidor
         run: |
           SERVER_IP="${{ secrets.SERVER_IP }}"
+          BRANCH_NAME="${{ github.ref_name }}"
 
-          # Envia o arquivo zip direto para a pasta tmp do servidor via SCP
+          # Define o diretório base com base na branch (hom -> dev-blink | main -> blink)
+          if [ "$BRANCH_NAME" = "main" ]; then
+            TARGET_DIR="/var/www/blink"
+            ENV_FILE=".env.production"
+          else
+            TARGET_DIR="/var/www/dev-blink"
+            ENV_FILE=".env.development"
+          fi
+
+          echo "🎯 Alvo do Deploy: $TARGET_DIR (Branch: $BRANCH_NAME)"
+
+          # Envia o arquivo zip para a pasta tmp do servidor via SCP
           scp -o StrictHostKeyChecking=no deploy-blink.zip ubuntu@$SERVER_IP:/tmp/
 
-          # Abre a conexão SSH para atualizar a pasta de produção
-          ssh -o StrictHostKeyChecking=no ubuntu@$SERVER_IP << 'EOF'
+          # Executa o script atômico via SSH
+          ssh -o StrictHostKeyChecking=no ubuntu@$SERVER_IP << EOF
             set -e
 
-            BASE_DIR="/var/www/blink"
+            BASE_DIR="$TARGET_DIR"
+            RELEASES_DIR="\$BASE_DIR/releases"
+            SHARED_DIR="\$BASE_DIR/shared"
+            CURRENT_DIR="\$BASE_DIR/current"
+            RELEASE_NAME="\$(date +%Y%m%d%H%M%S)"
+            NEW_RELEASE_DIR="\$RELEASES_DIR/\$RELEASE_NAME"
 
-            # 1. Garante que o unzip está instalado no servidor
+            # 1. Garante que o unzip está instalado
             if ! command -v unzip &> /dev/null; then
-                echo "📦 Instalando unzip..."
                 sudo apt-get update -y && sudo apt-get install unzip -y
             fi
 
-            # 2. Cria a estrutura base caso não exista
-            sudo mkdir -p "$BASE_DIR"
+            # 2. Cria a estrutura atômica básica se não existir
+            sudo mkdir -p "\$RELEASES_DIR" "\$SHARED_DIR/storage" "\$SHARED_DIR/bootstrap/cache"
 
-            # 3. Preserva a pasta de uploads do Storage real para não apagar fotos de pacientes
-            if [ -d "$BASE_DIR/storage/app/public" ]; then
-                echo "📸 Fazendo backup temporário dos uploads públicos..."
-                sudo mv "$BASE_DIR/storage/app/public" /tmp/blink_storage_backup
+            # 3. Garante que o arquivo de ambiente compartilhado (.env) existe no shared
+            if [ ! -f "\$SHARED_DIR/.env" ]; then
+                echo "⚠️ Arquivo .env não encontrado em shared/. Criando estrutura padrão..."
+                sudo touch "\$SHARED_DIR/.env"
             fi
 
-            echo "🧹 Limpando arquivos antigos do servidor..."
-            sudo rm -rf "${BASE_DIR:?}"/*
+            # 4. Cria a nova pasta para esta release específica
+            sudo mkdir -p "\$NEW_RELEASE_DIR"
 
-            # 4. Descompacta o novo pacote direto na pasta do site
-            echo "📂 Descompactando novo pacote de deploy..."
-            sudo unzip -o /tmp/deploy-blink.zip -d "$BASE_DIR"
+            # 5. Descompacta o pacote na nova release
+            echo "📂 Descompactando pacote na release \$RELEASE_NAME..."
+            sudo unzip -o /tmp/deploy-blink.zip -d "\$NEW_RELEASE_DIR"
 
-            # 5. Restaura a pasta de uploads preservada
-            if [ -d "/tmp/blink_storage_backup" ]; then
-                echo "📸 Restaurando uploads públicos..."
-                sudo rm -rf "$BASE_DIR/storage/app/public"
-                sudo mv /tmp/blink_storage_backup "$BASE_DIR/storage/app/public"
-            fi
-
-            # 🌟 CORREÇÃO CRUCIAL: Passa o dono do projeto para o Nginx ANTES de rodar o Artisan
-            echo "🔒 Aplicando governança de permissões pré-artisan..."
-            sudo chown -R www-data:www-data "$BASE_DIR"
-            sudo chmod -R 775 "$BASE_DIR/storage" "$BASE_DIR/bootstrap/cache"
-
-            # 6. Executa as Migrações de Banco de Dados e os Links de Storage no Servidor Real
-            echo "⚙️ Executando migrações e rotinas do Laravel..."
-            cd "$BASE_DIR"
+            # 6. Conecta os arquivos compartilhados (/shared/.env e /shared/storage) via links simbólicos
+            echo "🔗 Configurando links compartilhados (Shared & Storage)..."
             
-            # Limpa qualquer cache residual com o usuário correto
+            # Remove o .env que veio no zip e aponta para o do shared
+            sudo rm -f "\$NEW_RELEASE_DIR/.env"
+            sudo ln -s "\$SHARED_DIR/.env" "\$NEW_RELEASE_DIR/.env"
+
+            # Remove a pasta storage da release e aponta para o shared/storage persistente
+            sudo rm -rf "\$NEW_RELEASE_DIR/storage"
+            sudo ln -s "\$SHARED_DIR/storage" "\$NEW_RELEASE_DIR/storage"
+
+            # Remove o bootstrap/cache local e aponta para o shared
+            sudo rm -rf "\$NEW_RELEASE_DIR/bootstrap/cache"
+            sudo ln -s "\$SHARED_DIR/bootstrap/cache" "\$NEW_RELEASE_DIR/bootstrap/cache"
+
+            # 7. Ajusta permissões iniciais para o www-data rodar o artisan
+            sudo chown -R www-data:www-data "\$NEW_RELEASE_DIR"
+            sudo chmod -R 775 "\$SHARED_DIR/storage" "\$SHARED_DIR/bootstrap/cache"
+
+            # 8. Executa comandos do Laravel na nova release
+            echo "⚙️ Executando otimizações e migrações..."
+            cd "\$NEW_RELEASE_DIR"
+
             sudo -u www-data php artisan config:clear
             sudo -u www-data php artisan route:clear
 
-            # Executa as migrações e seeders de forma limpa
-            sudo -u www-data php artisan migrate:fresh --force
+            # Migrações e Seeders (Forçados no ambiente)
+            sudo -u www-data php artisan migrate --force
             sudo -u www-data php artisan db:seed --force
 
-            # Agora o www-data tem permissão para criar o link simbólico em public/ sem falhar!
-            sudo -u www-data php artisan storage:link
+            # Link simbólico absoluto oficial do storage para a pasta public
+            # (Remove o link padrão se existir e aponta de forma absoluta para o shared/storage/app/public)
+            sudo rm -rf "\$NEW_RELEASE_DIR/public/storage"
+            sudo ln -s "\$SHARED_DIR/storage/app/public" "\$NEW_RELEASE_DIR/public/storage"
 
-            # Otimiza o Laravel cacheando as rotas e configurações
+            # Otimizações de Produção
             sudo -u www-data php artisan config:cache
             sudo -u www-data php artisan route:cache
+            sudo -u www-data php artisan view:cache
 
-            # 7. Ajustar permissões finais de segurança estrutural
-            echo "🔒 Alinhando permissões finais de segurança..."
-            sudo find "$BASE_DIR" -type d -exec chmod 755 {} \;
-            sudo find "$BASE_DIR" -type f -exec chmod 644 {} \;
-            # Garante que as pastas de escrita continuem com permissão de grupo (775)
-            sudo chmod -R 775 "$BASE_DIR/storage" "$BASE_DIR/bootstrap/cache"
+            # 9. Troca atômica do link simbólico 'current' para apontar para a nova release
+            echo "🔄 Realizando a troca atômica (symlink current)..."
+            sudo ln -sfn "\$NEW_RELEASE_DIR" "\$CURRENT_DIR"
 
-            # 8. Limpeza de arquivos temporários do servidor
+            # 10. Governança e Limpeza de Releases Antigas (Mantém apenas as últimas 5)
+            echo "🧹 Limpando releases antigas (mantendo as 5 mais recentes)..."
+            cd "\$RELEASES_DIR"
+            sudo ls -t | tail -n +6 | xargs -I {} sudo rm -rf {} || true
+
+            # Limpa arquivo temporário
             rm -f /tmp/deploy-blink.zip
-            sudo rm -rf /tmp/blink_storage_backup
-            
-            echo "✅ Deploy de Blink finalizado com sucesso absoluto!"
+
+            echo "✅ Deploy atômico finalizado com sucesso para \$TARGET_DIR!"
           EOF
 
       - name: 🧹 Limpar Runner do GitHub

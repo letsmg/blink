@@ -27,6 +27,9 @@ return new class extends Migration
             // Return appointment flag
             $table->boolean('is_return')->default(false);
             $table->foreignId('original_appointment_id')->nullable()->constrained('appointments')->nullOnDelete();
+            // Vínculo com convênio e plano de saúde para cálculo financeiro
+            $table->foreignId('agreement_id')->nullable()->constrained()->nullOnDelete();
+            $table->foreignId('health_plan_id')->nullable()->constrained()->nullOnDelete();
             $table->timestamps();
             $table->softDeletes();
         });
