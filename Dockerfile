@@ -49,14 +49,15 @@ WORKDIR /var/www/blink
 # Copia todo o projeto já pronto que veio do GitHub Actions (com vendor e build do vite)
 COPY . .
 
-# Cria as pastas necessárias caso não existam e ajusta permissões
+# Cria as pastas necessárias, define o diretório de trabalho e ajusta permissões (ainda como root)
 RUN mkdir -p /var/www/blink/storage /var/www/blink/bootstrap/cache \
-    && chown -R www-data:www-data /var/www/blink/storage /var/www/blink/bootstrap/cache \
+    && chown -R www-data:www-data /var/www/blink \
     && chmod -R 775 /var/www/blink/storage /var/www/blink/bootstrap/cache
 
 # Expõe porta 8000
 EXPOSE 8000
 
+# A partir daqui o container roda com o usuário sem privilégios por segurança
 USER www-data
 
 CMD ["php", "artisan", "serve", "--host=0.0.0.0", "--port=8000"]
