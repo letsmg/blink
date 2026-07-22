@@ -1,8 +1,9 @@
 # Usa uma imagem oficial do PHP FPM limpa
 FROM php:8.4-fpm-alpine
 
-# Instala as dependências de sistema essenciais e de desenvolvimento para compilar as extensões
+# Instala as dependências de sistema e pacotes -dev necessários para compilar as extensões PHP
 RUN apk add --no-cache \
+    postgresql-dev \
     libpq \
     libpng \
     libpng-dev \
