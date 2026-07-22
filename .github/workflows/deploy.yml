@@ -36,7 +36,7 @@ jobs:
         run: |
           mkdir build-tmp
 
-          # Inclui as pastas essenciais do projeto Laravel + Build do Vite + Arquivos Docker versionados
+          # Inclui as pastas essenciais do projeto Laravel + Build do Vite + Arquivos Docker
           cp -r app bootstrap config database public resources routes storage vendor build-tmp/
           cp artisan composer.json package.json build-tmp/
           [ -f Dockerfile ] && cp Dockerfile build-tmp/ || true
@@ -118,41 +118,47 @@ jobs:
             sudo rm -rf "\$NEW_RELEASE_DIR/bootstrap/cache"
             sudo ln -s "\$SHARED_DIR/bootstrap/cache" "\$NEW_RELEASE_DIR/bootstrap/cache"
 
-            # 7. Ajusta permissões do diretório shared e da nova release para o www-data
+            # 7. Sobe/Atualiza o ambiente Docker do projeto antes de rodar comandos da aplicação
+            echo "🐳 Subindo containers Docker do projeto..."
+            cd "\$NEW_RELEASE_DIR"
+            if [ -f "docker-compose.yml" ]; then
+                # Garante que o .env compartilhado também fique acessível para o docker-compose se necessário
+                sudo rm -f docker-compose.override.yml
+                sudo docker compose up -d --build
+            fi
+
+            # 8. Ajusta permissões do diretório shared e da nova release para o www-data
             sudo chown -R www-data:www-data "\$SHARED_DIR"
             sudo chown -R www-data:www-data "\$NEW_RELEASE_DIR"
             sudo chmod -R 775 "\$SHARED_DIR"
 
-            # 8. Executa comandos do Laravel na nova release lendo o .env do shared
+            # 9. Executa comandos do Laravel na nova release lendo o .env do shared
             echo "⚙️ Executando otimizações e migrações..."
             cd "\$NEW_RELEASE_DIR"
 
-            # 8.1 Remove fisicamente o arquivo de cache de configuracao (caso o www-data nao consiga apagar)
             sudo rm -f bootstrap/cache/config.php bootstrap/cache/routes-v7.php
-
-            # 8.2 Limpa os caches da aplicação
             sudo -u www-data php artisan config:clear
             sudo -u www-data php artisan cache:clear
             sudo -u www-data php artisan route:clear
 
-            # 8.3 Migrações e Seeders (Forçados)
+            # Migrações e Seeders (Com os containers já rodando)
             sudo -u www-data php artisan migrate --force
             sudo -u www-data php artisan db:seed --force
 
-            # 8.4 Link simbólico do storage público
+            # Link simbólico oficial do storage para a pasta public
             sudo rm -rf "\$NEW_RELEASE_DIR/public/storage"
             sudo ln -s "\$SHARED_DIR/storage/app/public" "\$NEW_RELEASE_DIR/public/storage"
 
-            # 8.5 Otimizações para ambiente de execução
+            # Otimizações de Produção
             sudo -u www-data php artisan config:cache
             sudo -u www-data php artisan route:cache
             sudo -u www-data php artisan view:cache
 
-            # 9. Troca atômica do link simbólico 'current' para apontar para a nova release
+            # 10. Troca atômica do link simbólico 'current' para apontar para a nova release
             echo "🔄 Realizando a troca atômica (symlink current)..."
             sudo ln -sfn "\$NEW_RELEASE_DIR" "\$CURRENT_DIR"
 
-            # 10. Governança e Limpeza de Releases Antigas (Mantém apenas as últimas 5)
+            # 11. Governança e Limpeza de Releases Antigas (Mantém apenas as últimas 5)
             echo "🧹 Limpando releases antigas (mantendo as 5 mais recentes)..."
             cd "\$RELEASES_DIR"
             sudo ls -t | tail -n +6 | xargs -I {} sudo rm -rf {} || true
