@@ -49,8 +49,9 @@ WORKDIR /var/www/blink
 # Copia todo o projeto já pronto que veio do GitHub Actions (com vendor e build do vite)
 COPY . .
 
-# Permissões para storage e bootstrap/cache
-RUN chown -R www-data:www-data /var/www/blink/storage /var/www/blink/bootstrap/cache \
+# Cria as pastas necessárias caso não existam e ajusta permissões
+RUN mkdir -p /var/www/blink/storage /var/www/blink/bootstrap/cache \
+    && chown -R www-data:www-data /var/www/blink/storage /var/www/blink/bootstrap/cache \
     && chmod -R 775 /var/www/blink/storage /var/www/blink/bootstrap/cache
 
 # Expõe porta 8000
