@@ -8,10 +8,12 @@ services:
     image: postgres:16-alpine
     container_name: blink_pgsql
     restart: unless-stopped
+    env_file:
+      - .env
     environment:
-      POSTGRES_DB: blink_db
-      POSTGRES_USER: blink_user
-      POSTGRES_PASSWORD: "SH#jzN54$gTt7N*1"
+      POSTGRES_DB: ${DB_DATABASE}
+      POSTGRES_USER: ${DB_USERNAME}
+      POSTGRES_PASSWORD: ${DB_PASSWORD}
     ports:
       - "5432:5432"
     volumes:
@@ -58,20 +60,22 @@ services:
       - app_storage:/var/www/blink/storage
     ports:
       - "8000:8000"
+    env_file:
+      - .env
     environment:
-      APP_NAME: Blink
-      APP_ENV: local
-      APP_KEY: base64:CugRpS7G1+GHaukOeW8U5E0wscyANIlOhQSIlZF5fBY=
-      APP_DEBUG: "true"
-      APP_URL: http://localhost:8000
-      DB_CONNECTION: pgsql
+      APP_NAME: ${APP_NAME}
+      APP_ENV: ${APP_ENV}
+      APP_KEY: ${APP_KEY}
+      APP_DEBUG: ${APP_DEBUG}
+      APP_URL: ${APP_URL}
+      DB_CONNECTION: ${DB_CONNECTION}
       DB_HOST: pgsql
-      DB_PORT: 5432
-      DB_DATABASE: blink_db
-      DB_USERNAME: blink_user
-      DB_PASSWORD: "SH#jzN54$gTt7N*1"
+      DB_PORT: ${DB_PORT}
+      DB_DATABASE: ${DB_DATABASE}
+      DB_USERNAME: ${DB_USERNAME}
+      DB_PASSWORD: ${DB_PASSWORD}
       REDIS_HOST: redis
-      REDIS_PORT: 6379
+      REDIS_PORT: ${REDIS_PORT}
       CACHE_STORE: redis
       QUEUE_CONNECTION: redis
       SESSION_DRIVER: redis

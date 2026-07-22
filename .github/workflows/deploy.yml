@@ -36,10 +36,8 @@ jobs:
         run: |
           mkdir build-tmp
 
-          # Inclui as pastas essenciais do projeto Laravel + Build do Vite
+          # Inclui as pastas essenciais do projeto Laravel + Build do Vite + Arquivos Docker versionados
           cp -r app bootstrap config database public resources routes storage vendor build-tmp/
-
-          # Copia os arquivos vitais da raiz do projeto (Incluindo Dockerfile e docker-compose.yml se existirem na raiz)
           cp artisan composer.json package.json build-tmp/
           [ -f Dockerfile ] && cp Dockerfile build-tmp/ || true
           [ -f docker-compose.yml ] && cp docker-compose.yml build-tmp/ || true
@@ -92,12 +90,12 @@ jobs:
                 sudo apt-get update -y && sudo apt-get install unzip -y
             fi
 
-            # 2. Cria a estrutura atômica básica se não existir
+            # 2. Cria a estrutura atômica básica e pastas do shared se não existirem
             sudo mkdir -p "\$RELEASES_DIR" "\$SHARED_DIR/storage/app/public" "\$SHARED_DIR/storage/framework/cache" "\$SHARED_DIR/storage/framework/sessions" "\$SHARED_DIR/storage/framework/views" "\$SHARED_DIR/storage/logs" "\$SHARED_DIR/bootstrap/cache"
 
-            # 3. Garante que o arquivo de ambiente compartilhado (.env) existe no shared
+            # 3. Garante que o arquivo .env compartilhado existe
             if [ ! -f "\$SHARED_DIR/.env" ]; then
-                echo "⚠️ Arquivo .env não encontrado em shared/. Criando estrutura padrão..."
+                echo "⚠️ Arquivo .env não encontrado em shared/. Criando arquivo vazio..."
                 sudo touch "\$SHARED_DIR/.env"
             fi
 
@@ -120,23 +118,23 @@ jobs:
             sudo rm -rf "\$NEW_RELEASE_DIR/bootstrap/cache"
             sudo ln -s "\$SHARED_DIR/bootstrap/cache" "\$NEW_RELEASE_DIR/bootstrap/cache"
 
-            # 7. Ajusta permissões do shared e da nova release para o www-data
+            # 7. Ajusta permissões do diretório shared e da nova release para o www-data
             sudo chown -R www-data:www-data "\$SHARED_DIR"
             sudo chown -R www-data:www-data "\$NEW_RELEASE_DIR"
             sudo chmod -R 775 "\$SHARED_DIR"
 
-            # 8. Executa comandos do Laravel na nova release
+            # 8. Executa comandos do Laravel na nova release lendo o .env do shared
             echo "⚙️ Executando otimizações e migrações..."
             cd "\$NEW_RELEASE_DIR"
 
             sudo -u www-data php artisan config:clear
             sudo -u www-data php artisan route:clear
 
-            # Migrações e Seeders (Forçados no ambiente)
+            # Migrações e Seeders (Lendo as credenciais locais do shared/.env)
             sudo -u www-data php artisan migrate --force
             sudo -u www-data php artisan db:seed --force
 
-            # Link simbólico absoluto oficial do storage para a pasta public
+            # Link simbólico oficial do storage para a pasta public
             sudo rm -rf "\$NEW_RELEASE_DIR/public/storage"
             sudo ln -s "\$SHARED_DIR/storage/app/public" "\$NEW_RELEASE_DIR/public/storage"
 
