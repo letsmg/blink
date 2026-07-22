@@ -13,7 +13,9 @@ RUN apk add --no-cache \
     freetype-dev \
     zlib-dev \
     oniguruma \
+    oniguruma-dev \
     libxml2 \
+    libxml2-dev \
     zip \
     unzip \
     curl \
