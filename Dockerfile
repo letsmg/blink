@@ -43,16 +43,16 @@ RUN apk add --no-cache --virtual .build-deps autoconf build-base \
 # Instala o Composer
 COPY --from=composer:latest /usr/bin/composer /usr/bin/composer
 
-# Define diretório de trabalho
+# Define diretório de trabalho (o Docker cria a pasta raiz automaticamente aqui)
 WORKDIR /var/www/blink
 
 # Copia todo o projeto já pronto que veio do GitHub Actions (com vendor e build do vite)
 COPY . .
 
-# Cria as pastas necessárias, define o diretório de trabalho e ajusta permissões (ainda como root)
-RUN mkdir -p /var/www/blink/storage /var/www/blink/bootstrap/cache \
+# Cria as pastas de storage e cache caso não venham no commit, ajustando permissões como root
+RUN mkdir -p storage bootstrap/cache \
     && chown -R www-data:www-data /var/www/blink \
-    && chmod -R 775 /var/www/blink/storage /var/www/blink/bootstrap/cache
+    && chmod -R 775 storage bootstrap/cache
 
 # Expõe porta 8000
 EXPOSE 8000
