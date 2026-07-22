@@ -39,8 +39,10 @@ jobs:
           # Inclui as pastas essenciais do projeto Laravel + Build do Vite
           cp -r app bootstrap config database public resources routes storage vendor build-tmp/
 
-          # Copia os arquivos vitais da raiz do projeto
+          # Copia os arquivos vitais da raiz do projeto (Incluindo Dockerfile e docker-compose.yml se existirem na raiz)
           cp artisan composer.json package.json build-tmp/
+          [ -f Dockerfile ] && cp Dockerfile build-tmp/ || true
+          [ -f docker-compose.yml ] && cp docker-compose.yml build-tmp/ || true
 
           # Remove o link gerado localmente para evitar conflito com o link simbólico atômico do servidor
           rm -rf build-tmp/public/storage
@@ -65,10 +67,8 @@ jobs:
           # Define o diretório base com base na branch (hom -> dev-blink | main -> blink)
           if [ "$BRANCH_NAME" = "main" ]; then
             TARGET_DIR="/var/www/blink"
-            ENV_FILE=".env.production"
           else
             TARGET_DIR="/var/www/dev-blink"
-            ENV_FILE=".env.development"
           fi
 
           echo "🎯 Alvo do Deploy: $TARGET_DIR (Branch: $BRANCH_NAME)"
@@ -93,7 +93,7 @@ jobs:
             fi
 
             # 2. Cria a estrutura atômica básica se não existir
-            sudo mkdir -p "\$RELEASES_DIR" "\$SHARED_DIR/storage" "\$SHARED_DIR/bootstrap/cache"
+            sudo mkdir -p "\$RELEASES_DIR" "\$SHARED_DIR/storage/app/public" "\$SHARED_DIR/storage/framework/cache" "\$SHARED_DIR/storage/framework/sessions" "\$SHARED_DIR/storage/framework/views" "\$SHARED_DIR/storage/logs" "\$SHARED_DIR/bootstrap/cache"
 
             # 3. Garante que o arquivo de ambiente compartilhado (.env) existe no shared
             if [ ! -f "\$SHARED_DIR/.env" ]; then
@@ -108,37 +108,22 @@ jobs:
             echo "📂 Descompactando pacote na release \$RELEASE_NAME..."
             sudo unzip -o /tmp/deploy-blink.zip -d "\$NEW_RELEASE_DIR"
 
-            # 6. Conecta os arquivos compartilhados (/shared/.env e /shared/storage) via links simbólicos
+            # 6. Conecta os arquivos compartilhados (.env, storage e bootstrap/cache) via links simbólicos
             echo "🔗 Configurando links compartilhados (Shared & Storage)..."
             
-            # Garante que as pastas essenciais existem no shared com permissão total
-            sudo mkdir -p "\$SHARED_DIR/storage/app/public"
-            sudo mkdir -p "\$SHARED_DIR/storage/framework/cache"
-            sudo mkdir -p "\$SHARED_DIR/storage/framework/sessions"
-            sudo mkdir -p "\$SHARED_DIR/storage/framework/views"
-            sudo mkdir -p "\$SHARED_DIR/storage/logs"
-            sudo mkdir -p "\$SHARED_DIR/bootstrap/cache"
-
-            # Remove o .env que veio no zip e aponta para o do shared
             sudo rm -f "\$NEW_RELEASE_DIR/.env"
             sudo ln -s "\$SHARED_DIR/.env" "\$NEW_RELEASE_DIR/.env"
 
-            # Remove a pasta storage da release e aponta para o shared/storage persistente ANTES de QUALQUER artisan
             sudo rm -rf "\$NEW_RELEASE_DIR/storage"
             sudo ln -s "\$SHARED_DIR/storage" "\$NEW_RELEASE_DIR/storage"
 
-            # Remove o bootstrap/cache local e aponta para o shared
             sudo rm -rf "\$NEW_RELEASE_DIR/bootstrap/cache"
             sudo ln -s "\$SHARED_DIR/bootstrap/cache" "\$NEW_RELEASE_DIR/bootstrap/cache"
 
-            # 7. Garante permissão total do www-data no diretório shared e na release atual
+            # 7. Ajusta permissões do shared e da nova release para o www-data
             sudo chown -R www-data:www-data "\$SHARED_DIR"
             sudo chown -R www-data:www-data "\$NEW_RELEASE_DIR"
             sudo chmod -R 775 "\$SHARED_DIR"
-
-            # 7. Ajusta permissões iniciais para o www-data rodar o artisan
-            sudo chown -R www-data:www-data "\$NEW_RELEASE_DIR"
-            sudo chmod -R 775 "\$SHARED_DIR/storage" "\$SHARED_DIR/bootstrap/cache"
 
             # 8. Executa comandos do Laravel na nova release
             echo "⚙️ Executando otimizações e migrações..."
@@ -152,7 +137,6 @@ jobs:
             sudo -u www-data php artisan db:seed --force
 
             # Link simbólico absoluto oficial do storage para a pasta public
-            # (Remove o link padrão se existir e aponta de forma absoluta para o shared/storage/app/public)
             sudo rm -rf "\$NEW_RELEASE_DIR/public/storage"
             sudo ln -s "\$SHARED_DIR/storage/app/public" "\$NEW_RELEASE_DIR/public/storage"
 
