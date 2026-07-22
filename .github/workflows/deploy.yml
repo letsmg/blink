@@ -127,18 +127,23 @@ jobs:
             echo "⚙️ Executando otimizações e migrações..."
             cd "\$NEW_RELEASE_DIR"
 
+            # 8.1 Remove fisicamente o arquivo de cache de configuracao (caso o www-data nao consiga apagar)
+            sudo rm -f bootstrap/cache/config.php bootstrap/cache/routes-v7.php
+
+            # 8.2 Limpa os caches da aplicação
             sudo -u www-data php artisan config:clear
+            sudo -u www-data php artisan cache:clear
             sudo -u www-data php artisan route:clear
 
-            # Migrações e Seeders (Lendo as credenciais locais do shared/.env)
+            # 8.3 Migrações e Seeders (Forçados)
             sudo -u www-data php artisan migrate --force
             sudo -u www-data php artisan db:seed --force
 
-            # Link simbólico oficial do storage para a pasta public
+            # 8.4 Link simbólico do storage público
             sudo rm -rf "\$NEW_RELEASE_DIR/public/storage"
             sudo ln -s "\$SHARED_DIR/storage/app/public" "\$NEW_RELEASE_DIR/public/storage"
 
-            # Otimizações de Produção
+            # 8.5 Otimizações para ambiente de execução
             sudo -u www-data php artisan config:cache
             sudo -u www-data php artisan route:cache
             sudo -u www-data php artisan view:cache
