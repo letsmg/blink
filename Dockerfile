@@ -1,12 +1,13 @@
 # Usa uma imagem oficial do PHP FPM limpa
 FROM php:8.4-fpm-alpine
 
-# Instala apenas as dependências de sistema essenciais (sem compiladores pesados e sem Node/NPM)
+# Instala apenas as dependências de sistema essenciais (incluindo o zlib-dev para a extensão gd)
 RUN apk add --no-cache \
     libpq \
     libpng \
     libjpeg-turbo \
     freetype \
+    zlib-dev \
     oniguruma \
     libxml2 \
     zip \
