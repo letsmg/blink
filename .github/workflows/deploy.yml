@@ -37,8 +37,8 @@ jobs:
           mkdir build-tmp
 
           # Inclui as pastas essenciais do projeto Laravel + Build do Vite + Arquivos Docker
-          cp -r app bootstrap config database public resources routes storage vendor build-tmp/
-          cp artisan composer.json package.json build-tmp/
+          cp -r app bootstrap config database public resources routes storage vendor build-tmp/          
+          cp artisan composer.json composer.lock package.json build-tmp/          
           [ -f Dockerfile ] && cp Dockerfile build-tmp/ || true
           [ -f docker-compose.yml ] && cp docker-compose.yml build-tmp/ || true
 
