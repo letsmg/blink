@@ -49,8 +49,8 @@ RUN mkdir -p /var/www/blink
 # Define diretório de trabalho
 WORKDIR /var/www/blink
 
-# Copia todo o projeto já pronto que veio do GitHub Actions
-COPY . .
+# Copia os arquivos do projeto para dentro do container
+COPY . /var/www/blink
 
 # Cria as pastas usando caminhos absolutos e ajusta permissões como root de forma blindada
 RUN mkdir -p /var/www/blink/storage /var/www/blink/bootstrap/cache \
