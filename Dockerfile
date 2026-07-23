@@ -43,18 +43,19 @@ RUN apk add --no-cache --virtual .build-deps autoconf build-base \
 # Instala o Composer
 COPY --from=composer:latest /usr/bin/composer /usr/bin/composer
 
-# Define diretório de trabalho padrão
+# Cria a pasta raiz do projeto primeiro
+RUN mkdir -p /var/www/blink
+
+# Define diretório de trabalho
 WORKDIR /var/www/blink
 
 # Copia todo o projeto já pronto que veio do GitHub Actions
 COPY . .
 
-# Cria explicitamente as pastas usando caminhos absolutos e ajusta permissões
-RUN mkdir -p /var/www/blink/storage \
-    && mkdir -p /var/www/blink/bootstrap/cache \
+# Cria as pastas de storage e cache, ajustando permissões como root
+RUN mkdir -p storage bootstrap/cache \
     && chown -R www-data:www-data /var/www/blink \
-    && chmod -R 775 /var/www/blink/storage \
-    && chmod -R 775 /var/www/blink/bootstrap/cache
+    && chmod -R 775 storage bootstrap/cache
 
 # Expõe porta 8000
 EXPOSE 8000
