@@ -1,7 +1,7 @@
 # Usa uma imagem oficial do PHP FPM limpa
 FROM php:8.4-fpm-alpine
 
-# Instala as dependências de sistema e pacotes -dev necessários para compilar as extensões PHP
+# Instala as dependências de sistema e pacotes necessários
 RUN apk add --no-cache \
     postgresql-dev \
     libpq \
@@ -21,7 +21,7 @@ RUN apk add --no-cache \
     curl \
     git
 
-# Instala extensões PHP pré-compiladas do core
+# Instala extensões PHP
 RUN docker-php-ext-configure gd --with-freetype --with-jpeg \
     && docker-php-ext-install -j$(nproc) \
         pdo \
@@ -34,7 +34,7 @@ RUN docker-php-ext-configure gd --with-freetype --with-jpeg \
         gd \
         xml
 
-# Instala a extensão Redis via PECL de forma otimizada (removendo lixos em seguida)
+# Instala a extensão Redis via PECL
 RUN apk add --no-cache --virtual .build-deps autoconf build-base \
     && pecl install redis \
     && docker-php-ext-enable redis \
@@ -43,14 +43,13 @@ RUN apk add --no-cache --virtual .build-deps autoconf build-base \
 # Instala o Composer
 COPY --from=composer:latest /usr/bin/composer /usr/bin/composer
 
-# Cria a pasta raiz do projeto e define o diretório de trabalho como root
-RUN mkdir -p /var/www/blink
+# Define diretório de trabalho
 WORKDIR /var/www/blink
 
-# Copia os arquivos do projeto para dentro do container
+# Copia os arquivos do projeto
 COPY . /var/www/blink
 
-# Cria as pastas usando caminhos absolutos e ajusta permissões como root de forma blindada
+# Cria as pastas do Laravel e ajusta permissões após o copy (garantindo que exisatam)
 RUN mkdir -p /var/www/blink/storage /var/www/blink/bootstrap/cache \
     && chown -R www-data:www-data /var/www/blink \
     && chmod -R 775 /var/www/blink/storage /var/www/blink/bootstrap/cache
@@ -58,7 +57,7 @@ RUN mkdir -p /var/www/blink/storage /var/www/blink/bootstrap/cache \
 # Expõe porta 8000
 EXPOSE 8000
 
-# Troca para o usuário sem privilégios apenas no final por segurança
+# Troca para o usuário sem privilégios
 USER www-data
 
 CMD ["php", "artisan", "serve", "--host=0.0.0.0", "--port=8000"]
