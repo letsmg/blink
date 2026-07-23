@@ -43,10 +43,8 @@ RUN apk add --no-cache --virtual .build-deps autoconf build-base \
 # Instala o Composer
 COPY --from=composer:latest /usr/bin/composer /usr/bin/composer
 
-# Cria a pasta raiz do projeto primeiro
+# Cria a pasta raiz do projeto e define o diretório de trabalho como root
 RUN mkdir -p /var/www/blink
-
-# Define diretório de trabalho
 WORKDIR /var/www/blink
 
 # Copia os arquivos do projeto para dentro do container
@@ -60,7 +58,7 @@ RUN mkdir -p /var/www/blink/storage /var/www/blink/bootstrap/cache \
 # Expõe porta 8000
 EXPOSE 8000
 
-# A partir daqui o container roda com o usuário sem privilégios por segurança
+# Troca para o usuário sem privilégios apenas no final por segurança
 USER www-data
 
 CMD ["php", "artisan", "serve", "--host=0.0.0.0", "--port=8000"]
