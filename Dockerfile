@@ -44,12 +44,19 @@ RUN mkdir -p /var/www/blink/storage/framework/sessions \
     /var/www/blink/storage/framework/cache \
     /var/www/blink/bootstrap/cache
 
+# Define o diretório de trabalho primeiro
 WORKDIR /var/www/blink
 
-# 2. Copia os arquivos por cima da estrutura já criada
+# Cria a estrutura de diretórios necessária para o Laravel
+RUN mkdir -p storage/framework/sessions \
+    storage/framework/views \
+    storage/framework/cache \
+    bootstrap/cache
+
+# Copia os arquivos do projeto para o diretório atual
 COPY . /var/www/blink
 
-# 3. Garante permissões totais para o www-data
+# Garante as permissões adequadas para o usuário do webserver
 RUN chown -R www-data:www-data /var/www/blink \
     && chmod -R 775 storage bootstrap/cache
 
