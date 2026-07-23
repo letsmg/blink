@@ -52,10 +52,10 @@ WORKDIR /var/www/blink
 # Copia todo o projeto já pronto que veio do GitHub Actions
 COPY . .
 
-# Cria as pastas de storage e cache, ajustando permissões como root
-RUN mkdir -p storage bootstrap/cache \
+# Cria as pastas usando caminhos absolutos e ajusta permissões como root de forma blindada
+RUN mkdir -p /var/www/blink/storage /var/www/blink/bootstrap/cache \
     && chown -R www-data:www-data /var/www/blink \
-    && chmod -R 775 storage bootstrap/cache
+    && chmod -R 775 /var/www/blink/storage /var/www/blink/bootstrap/cache
 
 # Expõe porta 8000
 EXPOSE 8000
