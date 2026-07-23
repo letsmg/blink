@@ -1,12 +1,10 @@
-version: '3.8'
-
 services:
   # =============================================
   # PostgreSQL - Banco de dados principal
   # =============================================
   pgsql:
     image: postgres:16-alpine
-    container_name: blink_pgsql
+    container_name: ${COMPOSE_PROJECT_NAME:-blink}_pgsql
     restart: unless-stopped
     env_file:
       - .env
@@ -15,13 +13,13 @@ services:
       POSTGRES_USER: ${DB_USERNAME}
       POSTGRES_PASSWORD: ${DB_PASSWORD}
     ports:
-      - "5432:5432"
+      - "${DB_PORT_EXTERNAL:-5432}:5432"
     volumes:
       - pgsql_data:/var/lib/postgresql/data
     networks:
-      - blink_network
+      - app_network
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U blink_user -d blink_db"]
+      test: ["CMD-SHELL", "pg_isready -U ${DB_USERNAME} -d ${DB_DATABASE}"]
       interval: 5s
       timeout: 5s
       retries: 5
@@ -31,14 +29,14 @@ services:
   # =============================================
   redis:
     image: redis:7-alpine
-    container_name: blink_redis
+    container_name: ${COMPOSE_PROJECT_NAME:-blink}_redis
     restart: unless-stopped
     ports:
-      - "6379:6379"
+      - "${REDIS_PORT_EXTERNAL:-6379}:6379"
     volumes:
       - redis_data:/data
     networks:
-      - blink_network
+      - app_network
     healthcheck:
       test: ["CMD", "redis-cli", "ping"]
       interval: 5s
@@ -48,18 +46,18 @@ services:
   # =============================================
   # Aplicação Laravel (desenvolvimento)
   # =============================================
-  app:
+  blink_app:
     build:
       context: .
       dockerfile: Dockerfile
-    container_name: blink_app
+    container_name: ${COMPOSE_PROJECT_NAME:-blink}_app
     restart: unless-stopped
     working_dir: /var/www/blink
     volumes:
       - .:/var/www/blink
       - app_storage:/var/www/blink/storage
     ports:
-      - "8000:8000"
+      - "${APP_PORT_EXTERNAL:-8000}:8000"
     env_file:
       - .env
     environment:
@@ -85,7 +83,7 @@ services:
       redis:
         condition: service_healthy
     networks:
-      - blink_network
+      - app_network
     command: >
       sh -c "
         php artisan migrate:fresh --seed --force &&
@@ -98,5 +96,5 @@ volumes:
   app_storage:
 
 networks:
-  blink_network:
+  app_network:
     driver: bridge

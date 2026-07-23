@@ -118,11 +118,16 @@ jobs:
             sudo rm -rf "\$NEW_RELEASE_DIR/bootstrap/cache"
             sudo ln -s "\$SHARED_DIR/bootstrap/cache" "\$NEW_RELEASE_DIR/bootstrap/cache"
 
+            # Garante que serviços nativos antigos não fiquem travando as portas do Docker
+            sudo systemctl stop redis-server 2>/dev/null || true
+            sudo systemctl disable redis-server 2>/dev/null || true
+            sudo systemctl stop postgresql 2>/dev/null || true
+            sudo systemctl disable postgresql 2>/dev/null || true
+
             # 7. Sobe/Atualiza o ambiente Docker do projeto antes de rodar comandos da aplicação
             echo "🐳 Subindo containers Docker do projeto..."
             cd "\$NEW_RELEASE_DIR"
             if [ -f "docker-compose.yml" ]; then
-                # Garante que o .env compartilhado também fique acessível para o docker-compose se necessário
                 sudo rm -f docker-compose.override.yml
                 sudo docker compose up -d --build
             fi
@@ -154,8 +159,10 @@ jobs:
             sudo -u www-data php artisan route:cache
             sudo -u www-data php artisan view:cache
 
-            # 10. Troca atômica do link simbólico 'current' para apontar para a nova release
+            # 10. Troca atômica do link simbólico 'current' (Garantindo também a pasta e permissões corretas)
             echo "🔄 Realizando a troca atômica (symlink current)..."
+            sudo mkdir -p "\$CURRENT_DIR"
+            sudo chown -R www-data:www-data "\$CURRENT_DIR"
             sudo ln -sfn "\$NEW_RELEASE_DIR" "\$CURRENT_DIR"
 
             # 11. Governança e Limpeza de Releases Antigas (Mantém apenas as últimas 5)
