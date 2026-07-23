@@ -49,10 +49,10 @@ WORKDIR /var/www/blink
 # Copia os arquivos do projeto
 COPY . /var/www/blink
 
-# Cria as pastas do Laravel e ajusta permissões após o copy (garantindo que exisatam)
-RUN mkdir -p /var/www/blink/storage /var/www/blink/bootstrap/cache \
+# Cria as pastas usando caminhos relativos ao WORKDIR e ajusta permissões
+RUN mkdir -p storage/framework/sessions storage/framework/views storage/framework/cache bootstrap/cache \
     && chown -R www-data:www-data /var/www/blink \
-    && chmod -R 775 /var/www/blink/storage /var/www/blink/bootstrap/cache
+    && chmod -R 775 storage bootstrap/cache
 
 # Expõe porta 8000
 EXPOSE 8000
