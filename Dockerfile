@@ -1,7 +1,5 @@
-# Usa uma imagem oficial do PHP FPM limpa
 FROM php:8.4-fpm-alpine
 
-# Instala as dependências de sistema e pacotes necessários
 RUN apk add --no-cache \
     postgresql-dev \
     libpq \
@@ -21,7 +19,6 @@ RUN apk add --no-cache \
     curl \
     git
 
-# Instala extensões PHP
 RUN docker-php-ext-configure gd --with-freetype --with-jpeg \
     && docker-php-ext-install -j$(nproc) \
         pdo \
@@ -34,30 +31,30 @@ RUN docker-php-ext-configure gd --with-freetype --with-jpeg \
         gd \
         xml
 
-# Instala a extensão Redis via PECL
 RUN apk add --no-cache --virtual .build-deps autoconf build-base \
     && pecl install redis \
     && docker-php-ext-enable redis \
     && apk del .build-deps
 
-# Instala o Composer
 COPY --from=composer:latest /usr/bin/composer /usr/bin/composer
 
-# Define diretório de trabalho
+# 1. Cria a estrutura de pastas ANTES de qualquer cópia
+RUN mkdir -p /var/www/blink/storage/framework/sessions \
+    /var/www/blink/storage/framework/views \
+    /var/www/blink/storage/framework/cache \
+    /var/www/blink/bootstrap/cache
+
 WORKDIR /var/www/blink
 
-# Copia os arquivos do projeto
+# 2. Copia os arquivos por cima da estrutura já criada
 COPY . /var/www/blink
 
-# Cria as pastas usando caminhos relativos ao WORKDIR e ajusta permissões
-RUN mkdir -p storage/framework/sessions storage/framework/views storage/framework/cache bootstrap/cache \
-    && chown -R www-data:www-data /var/www/blink \
+# 3. Garante permissões totais para o www-data
+RUN chown -R www-data:www-data /var/www/blink \
     && chmod -R 775 storage bootstrap/cache
 
-# Expõe porta 8000
 EXPOSE 8000
 
-# Troca para o usuário sem privilégios
 USER www-data
 
 CMD ["php", "artisan", "serve", "--host=0.0.0.0", "--port=8000"]
