@@ -1,5 +1,104 @@
 services:
   # =============================================
+  # Jitsi Meet - Servidor de teleatendimento (videochamadas E2E)
+  # =============================================
+  jitsi-web:
+    image: jitsi/web:stable-9457
+    container_name: ${COMPOSE_PROJECT_NAME:-blink}_jitsi_web
+    restart: unless-stopped
+    ports:
+      - "${JITSI_HTTP_PORT:-8080}:80"
+      - "${JITSI_HTTPS_PORT:-8443}:443"
+    volumes:
+      - jitsi_web_config:/config
+      - jitsi_web_transcripts:/usr/share/jitsi-meet/transcripts
+    environment:
+      - XMPP_SERVER=jitsi-prosody
+      - XMPP_DOMAIN=meet.jitsi
+      - XMPP_AUTH_DOMAIN=auth.meet.jitsi
+      - XMPP_RECORDER_DOMAIN=recorder.meet.jitsi
+      - PUBLIC_URL=${JITSI_PUBLIC_URL:-http://localhost:8080}
+      - JIBRI_RECORDER_PASSWORD=${JITSI_JIBRI_RECORDER_PASSWORD:-recorderpass}
+      - JIBRI_XMPP_USER=jibri
+      - JVB_XMPP_USER=jvb
+      - ENABLE_COLIBRI_WEBSOCKET=1
+      - TZ=America/Sao_Paulo
+    networks:
+      - app_network
+    depends_on:
+      - jitsi-prosody
+      - jitsi-jicofo
+      - jitsi-jvb
+
+  jitsi-prosody:
+    image: jitsi/prosody:stable-9457
+    container_name: ${COMPOSE_PROJECT_NAME:-blink}_jitsi_prosody
+    restart: unless-stopped
+    volumes:
+      - jitsi_prosody_config:/config
+      - jitsi_prosody_plugins:/prosody-plugins-custom
+    environment:
+      - AUTH_TYPE=internal
+      - XMPP_DOMAIN=meet.jitsi
+      - XMPP_AUTH_DOMAIN=auth.meet.jitsi
+      - XMPP_RECORDER_DOMAIN=recorder.meet.jitsi
+      - JIBRI_XMPP_USER=jibri
+      - JIBRI_XMPP_PASSWORD=${JITSI_JIBRI_XMPP_PASSWORD:-jibripass}
+      - JIBRI_RECORDER_PASSWORD=${JITSI_JIBRI_RECORDER_PASSWORD:-recorderpass}
+      - JIBRI_RECORDER_USER=recorder
+      - JVB_XMPP_USER=jvb
+      - JVB_XMPP_PASSWORD=${JITSI_JVB_XMPP_PASSWORD:-jvbpass}
+      - JWT_APP_ID=${JITSI_JWT_APP_ID:-blink_app}
+      - JWT_APP_SECRET=${JITSI_JWT_APP_SECRET:-blink_jitsi_secret_change_me}
+      - ENABLE_AUTH=1
+      - TZ=America/Sao_Paulo
+    networks:
+      - app_network
+
+  jitsi-jicofo:
+    image: jitsi/jicofo:stable-9457
+    container_name: ${COMPOSE_PROJECT_NAME:-blink}_jitsi_jicofo
+    restart: unless-stopped
+    volumes:
+      - jitsi_jicofo_config:/config
+    environment:
+      - XMPP_SERVER=jitsi-prosody
+      - XMPP_DOMAIN=meet.jitsi
+      - XMPP_AUTH_DOMAIN=auth.meet.jitsi
+      - JIBRI_RECORDER_PASSWORD=${JITSI_JIBRI_RECORDER_PASSWORD:-recorderpass}
+      - JIBRI_XMPP_USER=jibri
+      - JVB_XMPP_USER=jvb
+      - JWT_APP_ID=${JITSI_JWT_APP_ID:-blink_app}
+      - JWT_APP_SECRET=${JITSI_JWT_APP_SECRET:-blink_jitsi_secret_change_me}
+      - TZ=America/Sao_Paulo
+    networks:
+      - app_network
+    depends_on:
+      - jitsi-prosody
+
+  jitsi-jvb:
+    image: jitsi/jvb:stable-9457
+    container_name: ${COMPOSE_PROJECT_NAME:-blink}_jitsi_jvb
+    restart: unless-stopped
+    ports:
+      - "${JITSI_JVB_PORT:-10000}:10000/udp"
+    volumes:
+      - jitsi_jvb_config:/config
+    environment:
+      - XMPP_SERVER=jitsi-prosody
+      - XMPP_AUTH_DOMAIN=auth.meet.jitsi
+      - XMPP_INTERNAL_MUC_DOMAIN=internal-muc.meet.jitsi
+      - JVB_XMPP_USER=jvb
+      - JVB_XMPP_PASSWORD=${JITSI_JVB_XMPP_PASSWORD:-jvbpass}
+      - JVB_BREWERY_MUC=jvbbrewery
+      - JVB_PORT=10000
+      - TZ=America/Sao_Paulo
+    networks:
+      - app_network
+    depends_on:
+      - jitsi-prosody
+
+  # =============================================
   # PostgreSQL - Banco de dados principal
   # =============================================
   pgsql:
@@ -94,6 +193,12 @@ volumes:
   pgsql_data:
   redis_data:
   app_storage:
+  jitsi_web_config:
+  jitsi_web_transcripts:
+  jitsi_prosody_config:
+  jitsi_prosody_plugins:
+  jitsi_jicofo_config:
+  jitsi_jvb_config:
 
 networks:
   app_network:

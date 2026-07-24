@@ -5,6 +5,7 @@ use App\Http\Controllers\Api\AccountReceivableController;
 use App\Http\Controllers\Api\CepController;
 use App\Http\Controllers\Api\AppointmentController;
 use App\Http\Controllers\Api\AuthController;
+use App\Http\Controllers\Api\ConsultationRoomController;
 use App\Http\Controllers\Api\MessageController;
 use App\Http\Controllers\Api\PatientController;
 use App\Http\Controllers\Api\ProfessionalController;
@@ -152,6 +153,32 @@ Route::middleware('auth:sanctum')->group(function () {
                 Route::post('/{account}/pay', [AccountReceivableController::class, 'markAsPaid']);
                 Route::delete('/{account}', [AccountReceivableController::class, 'destroy']);
             });
+
+            // =============================================
+            // Teleatendimento - Salas de Consulta Virtual (Jitsi Meet)
+            // =============================================
+            Route::prefix('consultation-rooms')->group(function () {
+                // Rotas com caminho fixo DEVEM vir antes das rotas com parâmetro {room}
+                // para evitar que Laravel capture 'appointments' como ID de sala.
+                Route::post('/appointments/{appointment}', [ConsultationRoomController::class, 'store']);
+                Route::get('/appointments/{appointment}', [ConsultationRoomController::class, 'byAppointment']);
+                // Rotas com parâmetro {room}
+                Route::get('/{room}', [ConsultationRoomController::class, 'show']);
+                Route::post('/{room}/start', [ConsultationRoomController::class, 'start']);
+                Route::post('/{room}/end', [ConsultationRoomController::class, 'end']);
+            });
         });
+
+    // =============================================
+    // Teleatendimento - Rotas de paciente (acesso à própria sala)
+    // =============================================
+    // Rotas acessíveis a qualquer usuário autenticado para visualizar sua sala.
+    // A validação de permissão (paciente vinculado, profissional ou staff) é feita no controller.
+    Route::prefix('consultation-rooms')->group(function () {
+        // Rotas com caminho fixo primeiro
+        Route::get('/appointments/{appointment}', [ConsultationRoomController::class, 'byAppointment']);
+        // Rota com parâmetro depois
+        Route::get('/{room}', [ConsultationRoomController::class, 'show']);
+    });
 
 });

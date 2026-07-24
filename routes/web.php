@@ -1,6 +1,7 @@
 <?php
 // Copyright (c) 2026 Luiz Eduardo T. Silva. Todos os direitos reservados.
 
+use App\Http\Controllers\ConsultationViewController;
 use App\Http\Controllers\SpaController;
 use App\Http\Controllers\TranslationController;
 use App\Http\Controllers\VisitorLanguageController;
@@ -27,6 +28,13 @@ Route::prefix('api')->group(function (): void {
     Route::get('/visitor-language', [VisitorLanguageController::class, 'show']);
     Route::post('/visitor-language', [VisitorLanguageController::class, 'store']);
     Route::get('/visitor-language/fallback', [VisitorLanguageController::class, 'fallback']);
+});
+
+// Rota de teleatendimento — sala de consulta virtual (Jitsi Meet)
+// Requer autenticação (via Sanctum SPA ou token na URL)
+Route::middleware('auth:sanctum')->group(function (): void {
+    Route::get('/consulta/{appointmentId}', [ConsultationViewController::class, 'room'])
+        ->name('consultation.room');
 });
 
 // Catch-all route for the SPA - renders the Vue app for all non-API routes

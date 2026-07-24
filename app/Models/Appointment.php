@@ -14,14 +14,24 @@ class Appointment extends Model
         'patient_id',
         'professional_id',
         'location_id',
+        'type',
+        'clinic_id',
         'date',
         'time',
         'notes',
         'is_paid',
         'payment_method',
         'paid_at',
+        'amount',
         'is_return',
         'original_appointment_id',
+        'cancelled_at',
+        'cancellation_reason',
+        'cancelled_by',
+        'patient_notes',
+        'professional_notes',
+        'started_at',
+        'ended_at',
         'agreement_id',
         'health_plan_id',
     ];
@@ -33,7 +43,11 @@ class Appointment extends Model
             'time' => 'string',
             'is_paid' => 'boolean',
             'paid_at' => 'datetime',
+            'amount' => 'decimal:2',
             'is_return' => 'boolean',
+            'cancelled_at' => 'datetime',
+            'started_at' => 'datetime',
+            'ended_at' => 'datetime',
         ];
     }
 
@@ -91,5 +105,38 @@ class Appointment extends Model
     public function healthPlan(): BelongsTo
     {
         return $this->belongsTo(HealthPlan::class);
+    }
+
+    /**
+     * Clínica onde ocorrerá o atendimento presencial.
+     * Nulo para teleatendimento.
+     */
+    public function clinic(): BelongsTo
+    {
+        return $this->belongsTo(Company::class, 'clinic_id');
+    }
+
+    /**
+     * Sala de teleatendimento vinculada a esta consulta (1:1).
+     */
+    public function consultationRoom()
+    {
+        return $this->hasOne(ConsultationRoom::class);
+    }
+
+    /**
+     * Verifica se o agendamento é do tipo teleatendimento.
+     */
+    public function isTelehealth(): bool
+    {
+        return $this->type === 'telehealth';
+    }
+
+    /**
+     * Verifica se o agendamento é do tipo presencial.
+     */
+    public function isPresencial(): bool
+    {
+        return $this->type === 'presencial';
     }
 }
