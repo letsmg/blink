@@ -160,7 +160,7 @@ jobs:
                 blink-redis-${ENV_LABEL} \
                 blink-psql-${ENV_LABEL} \
                 blink-nginx-${ENV_LABEL} \
-                portapp-${ENV_LABEL} 2>/dev/null || true
+                blinkapp-${ENV_LABEL} 2>/dev/null || true
 
             echo "🖼️ Sincronizando uploads..."
 
