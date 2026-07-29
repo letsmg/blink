@@ -7,10 +7,13 @@ use Illuminate\Http\Request;
 use Symfony\Component\HttpFoundation\Response;
 
 /**
- * Middleware to sanitize and trim all input data for non-GET requests.
+ * Middleware to sanitize all input data for non-GET requests.
  * 
- * Aplica trim() em todas as strings recebidas para remover espaços
- * desnecessários antes do processamento, garantindo dados limpos.
+ * Aplica trim() e strip_tags() em todas as strings recebidas para remover
+ * espaços desnecessários e prevenir ataques de XSS por injeção de scripts.
+ * 
+ * A sanitização de tags HTML é obrigatória para conformidade com a política
+ * de segurança do sistema (clinerules §4 - Higienização de Entradas).
  */
 class SanitizeInput
 {
@@ -32,11 +35,15 @@ class SanitizeInput
 
     /**
      * Recursively sanitize input data.
+     * Aplica trim() para remover espaços e strip_tags() para remover
+     * tags HTML/JS maliciosas antes de qualquer processamento.
      */
     private function sanitize(mixed $data): mixed
     {
         if (is_string($data)) {
-            return trim($data);
+            // strip_tags() primeiro para remover scripts/tags HTML,
+            // depois trim() para remover espaços residuais
+            return $this->trimNullToNull(strip_tags(trim($data)));
         }
 
         if (is_array($data)) {
@@ -44,5 +51,14 @@ class SanitizeInput
         }
 
         return $data;
+    }
+
+    /**
+     * Converte string vazia resultante do trim em null.
+     * Evita persistir strings vazias no banco de dados.
+     */
+    private function trimNullToNull(string $value): ?string
+    {
+        return $value === '' ? null : $value;
     }
 }

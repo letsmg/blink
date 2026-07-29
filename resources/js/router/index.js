@@ -56,15 +56,16 @@ router.beforeEach((to, from, next) => {
     }
 
     if (to.meta.guest && user) {
-        if (user?.role === 0) return next({ name: 'PatientDashboard' });
+        // Slugs: 'patient' = Paciente, demais = Staff/Professional
+        if (user?.role === 'patient') return next({ name: 'PatientDashboard' });
         return next({ name: 'StaffDashboard' });
     }
 
-    if (to.meta.role === 'patient' && user?.role !== 0) {
+    if (to.meta.role === 'patient' && user?.role !== 'patient') {
         return next({ name: 'StaffDashboard' });
     }
 
-    if (to.meta.role === 'staff' && user?.role === 0) {
+    if (to.meta.role === 'staff' && user?.role === 'patient') {
         return next({ name: 'PatientDashboard' });
     }
 

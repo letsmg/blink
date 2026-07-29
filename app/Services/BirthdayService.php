@@ -36,7 +36,7 @@ class BirthdayService
         }
 
         // Busca todos os usuários Staff (Admin = role 1, Operational = role 2)
-        $staffUsers = User::whereIn('role', [UserRole::Admin, UserRole::Operational])->get();
+        $staffUsers = User::whereIn('role', [UserRole::Admin->value, UserRole::AdminOperational->value, UserRole::Professional->value])->get();
 
         if ($staffUsers->isEmpty()) {
             return 0;
@@ -63,7 +63,7 @@ class BirthdayService
 
             // Cria a mensagem como sendo do sistema (sender_id = null ou um user admin)
             // Usamos o primeiro admin encontrado como sender, ou null se não houver
-            $senderId = User::where('role', UserRole::Admin)->first()?->id;
+            $senderId = User::where('role', UserRole::Admin->value)->first()?->id;
 
             Message::create([
                 'sender_id' => $senderId,

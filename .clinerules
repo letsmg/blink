@@ -8,6 +8,40 @@ Você é o copiloto de desenvolvimento, um engenheiro de software especialista s
 * **VERIFICAÇÃO DE VERSÃO:** Antes de executar qualquer comando de instalação (como `composer require` ou `npm install`), verifique a data de lançamento da versão. Se a última versão tiver menos de 15 dias de vida, force a instalação da versão estável anterior que respeite essa janela de segurança de 15 dias.
 
 ###############################################################################
+## 0. ARQUITETURA, INFRAESTRUTURA & ROTAS
+###############################################################################
+
+### 🐳 ISOLAMENTO DE STACKS DOCKER (CRÍTICO — NUNCA VIOLAR)
+
+* **Diretiva `name:` Obrigatória:** Todo `docker-compose.hom.yml` DEVE conter `name: blink-hom` no topo. Todo `docker-compose.prod.yml` DEVE conter `name: blink-prod` no topo. Isso garante que um deploy de homologação NUNCA derrube a produção e vice-versa.
+* **Nomes de Containers Padronizados:** Todos os containers, volumes e redes Docker DEVEM usar sufixos claros `-hom` e `-prod`. Exemplos:
+  * Container: `blinkapp-hom`, `blinkapp-prod`
+  * Nginx: `blink-nginx-hom`, `blink-nginx-prod`
+  * PostgreSQL: `blink-psql-hom`, `blink-psql-prod`
+  * Redis: `blink-redis-hom`, `blink-redis-prod`
+  * Volume: `blink-pgsql-data-hom`, `blink-pgsql-data-prod`
+  * Network: `blink-net-hom`, `blink-net-prod`
+
+### 📊 TABELA DE PORTAS — BLOQUEIO RÍGIDO (NUNCA ALTERAR SEM AUTORIZAÇÃO EXPLÍCITA)
+
+| Serviço | Ambiente | Porta Externa (Host) | Porta Interna (Container) |
+| :--- | :--- | :--- | :--- |
+| **Nginx HTTP** | Homologação | `8010` | `80` |
+| **Nginx HTTP** | Produção | `8011` | `80` |
+| **PostgreSQL** | Homologação | `5433` | `5432` |
+| **PostgreSQL** | Produção | `5433` | `5432` |
+| **Redis** | Homologação | `6380` | `6379` |
+| **Redis** | Produção | `6380` | `6379` |
+
+> ⚠️ **REGRA:** As portas externas acima são imutáveis para o projeto Blink. Antes de criar qualquer novo serviço ou docker-compose, consulte esta tabela para evitar conflitos de porta com outros projetos (Portfolio, Demanda3D, etc.).
+
+* **Idempotência:** Todos os scripts de deploy, migrations e comandos auxiliares devem ser estritamente idempotentes (podem ser executados múltiplas vezes sem quebrar o sistema ou duplicar dados).
+* **Seeders de Teste:** Para cada tabela criada ou modificada, é obrigatório criar ou atualizar o seu respectivo Seeder para gerar **pelo menos 5 registros** de teste. Esses seeders devem utilizar estritamente o método `updateOrCreate` do Laravel para evitar falhas de duplicidade, respeitando rigorosamente as validações de dados e regras descritas na seção específica do projeto.
+* **Organização de Rotas:** Sempre separar as rotas em grupos de middlewares específicos de autenticação e nível de acesso. Evite declarar middlewares individualmente nos controllers para garantir que nenhuma rota nova fique exposta por esquecimento.
+* **Upload de Imagens:** Utilizar obrigatoriamente a biblioteca SortableJS em formulários que permitam o envio de múltiplas imagens, garantindo a ordenação intuitiva via drag-and-drop no frontend (Vue 3).
+* **Gerenciamento do Storage local:** Todos os arquivos de mídia estáticos do sistema localizados em storage/app/public devem ser versionados e enviados ao servidor, exceto pastas de uploads dinâmicos gerados por usuários (como imagens de produtos). A exibição deve seguir o padrão nativo do comando php artisan storage:link.
+
+###############################################################################
 PART 1: DIRETRIZES GLOBAIS (Válidas para o ecossistema Laravel / Vue / Flutter)
 ###############################################################################
 
@@ -31,16 +65,19 @@ Padrões de Código, Nomenclatura e Documentação
 
 Versionamento, Commits e Deploys (Bloqueio Rígido)
 
+* Git: PROIBIDO executar git commit ou git push. Essa responsabilidade é exclusiva do usuário.
 * Bloqueio de Automação: Nunca, sob circunstância alguma, faça commits, pushes ou deploys automáticos sem uma solicitação explícita e clara no chat. O controle final do histórico do Git e do ambiente de produção é exclusivo do usuário.
 
 Qualidade de Código e Testes
 
 * Testes Orientados ao Negócio: Os testes unitários criados no sistema devem, obrigatoriamente, atender e validar o plano de negócio e suas regras de fluxo (ex: consistência de agendamentos, validação de acessos, disponibilidade de locais por profissional e bloqueios de segurança), garantindo que a aplicação funcione exatamente conforme as regras descritas na especificação.
+* Pest Framework (Backend): O uso do framework Pest é obrigatório para testes de Unidade e Integração (Feature). Nenhuma funcionalidade que envolva transações, paridade de dados (criptografia) ou permissões de faturamento pode ser considerada concluída sem cobertura completa de testes.
+* Playwright (E2E Frontend): Desenvolver testes ponta a ponta (E2E) robustos no Playwright com base nas regras de negócio documentadas no projeto, validando fluxos críticos como login de múltiplos perfis, registro progressivo, checkout e restrições de permissões.
 
 Governança e Segurança Rígida (Dados de Saúde)
 
 * Criptografia de Credenciais: Usar obrigatoriamente hash Argon2id para a persistência de senhas e dados de autenticação sensíveis.
-* Sanitização de Entrada: Aplicar rigorosamente mecanismos de limpeza e trim (ex: usando middlewares ou Form Requests no Laravel) em todos os dados recebidos no backend antes de qualquer processamento ou persistência.
+* Sanitização de Entrada: Aplicar rigorosamente mecanismos de limpeza, trim() e strip_tags() (ex: usando middlewares ou Form Requests no Laravel) em todos os dados recebidos no backend antes de qualquer processamento ou persistência.
 * Sanitização de Saída: Aplicar mecanismos nativos de escape de contextos para mitigar riscos de XSS ao renderizar dados dinâmicos no front-end.
 * Validação Dupla: Todos os campos do sistema devem, obrigatoriamente, ser validados tanto no front-end (VueJS/TypeScript) para usabilidade quanto no back-end (Laravel Form Requests) para segurança impenetrável.
 
@@ -60,18 +97,70 @@ Estrutura do Backend e Banco de Dados
 * Padrão de Projeto: Modelo MVC expandido utilizando a separação de conceitos padrão de mercado: Controllers, Services (regras de negócio), Repositories (consultas e persistência), Requests (Validação de formulários) e Policies (Autorização de acesso).
 * Migrations Estritas: Nunca crie migrations para adicionar campos isolados em tabelas que ainda estão em desenvolvimento ativo. Altere a migration original que cria a tabela e execute o reset estrutural (php artisan migrate:fresh).
 
-Massa de Dados e Facilitadores de Desenvolvimento (Ambiente Local)
+###############################################################################
+## 3. [CRÍTICO] SEGURANÇA DA INFORMAÇÃO E PARIDADE DE DADOS (LGPD)
+###############################################################################
 
-* Seeders e Factories: Imediatamente após a criação de qualquer tabela do banco de dados, devem ser criados seus respectivos Seeders e Factories configurados para cadastrar e popular pelo menos 10 registros fictícios realistas de cada tabela no ambiente de desenvolvimento local (incluindo vínculos na tabela pivô de locais).
-* Auxiliares TypeScript para Formulários: No front-end (Vue.js), deve ser implementado um arquivo TypeScript (.ts) dedicado contendo funções helper de preenchimento automático de formulários. Toda página de cadastro de dados deve implementar visualmente dois botões auxiliares: um botão para preencher automaticamente todos os campos com dados de teste válidos e um botão para limpar o formulário.
-* Facilitador de Login: Na tela de login, deve haver uma seção/lista lateral ou em anexo exibindo os usuários de teste gerados no banco de dados com links acionáveis. Ao clicar em um usuário dessa lista, o formulário de login e senha deve ser preenchido automaticamente com as credenciais selecionadas para agilizar o fluxo de testes locais.
+* **Proibição de Texto Puro (PII):** É proibido armazenar e-mails, documentos (CPF/CNPJ), telefones ou endereços de clientes e usuários em formato de texto limpo no banco de dados.
+* **Exceção Operacional:** A coluna email da tabela users pode ser armazenada em texto puro estritamente para fins de login/autenticação nativa do Laravel Fortify.
+* **Estrutura de Paridade para Dados Sensíveis:** Para todos os outros dados pessoais identificáveis (PII), utilize a seguinte modelagem de colunas duplas:
+  * **Campos de Busca (`*_hash`):** Hash determinístico e não reversível gerado via hash('sha256', $valor). Usado exclusivamente para índices únicos (UNIQUE INDEX) e cláusulas de busca rápida (WHERE).
+  * **Campos de Armazenamento (`*_encrypted`):** Criptografia simétrica em repouso gerada via Crypt::encryptString($valor). Usado exclusivamente para descriptografia em memória no momento da exibição ou envio de mensagens.
+* **Tratamento de Nomes:** Separe o nome dos usuários em first_name e last_name (ambos contendo suas respectivas colunas _hash e _encrypted). Crie uma coluna em texto puro chamada display_name contendo apenas um apelido ou primeiro nome para uso seguro em listagens gerais. Nunca utilize a coluna genérica name.
 
-Arquitetura de Layouts no Front-end (Vue.js)
+###############################################################################
+## 4. [SEGURANÇA] AUTENTICAÇÃO E ENTRADA DE DADOS
+###############################################################################
 
-* Divisão de Componentes Globais: As páginas da aplicação Vue.js devem ser rigidamente divididas estruturalmente usando componentes de Layout reaproveitáveis para garantir consistência visual e facilidade de manutenção.
-* Fluxo Não Autenticado (Público): As páginas acessíveis sem login devem renderizar obrigatoriamente a combinação dos componentes Header (topo) e Footer (rodapé).
-* Fluxo Autenticado (Privado): As páginas restritas a usuários logados devem renderizar obrigatoriamente os componentes AuthHeader e AuthFooter.
-* Organização do Escopo HTML / Body: Os componentes de cabeçalho (Header e AuthHeader) devem conter e gerenciar toda a estrutura de tags de abertura iniciais do layout, estendendo-se explicitamente até a tag de abertura <body> (ou container wrapper principal equivalente). Os componentes de rodapé (Footer e AuthFooter) devem encapsular as rotinas finais e realizar estritamente o fechamento dessa mesma estrutura, incluindo a tag de fechamento </body>.
+* **Algoritmo de Hash para Senhas:** Utilizar obrigatoriamente Argon2id com as seguintes configurações de hardware:
+  * Memory cost: 64MB
+  * Time cost: 3
+  * Threads: 2
+* **Fluxo Zero E-mail Plaintext:** No fluxo de "Esqueci a Senha", o e-mail inserido pelo usuário deve ser convertido em hash para localizar o registro no banco. O email_encrypted só deve ser descriptografado em memória temporária para disparar o e-mail de recuperação, sem nunca persistir descriptografado na requisição ou nos logs.
+* **Higienização de Entradas (Sanitization):** Aplicar sanitização rigorosa usando trim() e strip_tags() em todos os dados de entrada de formulários (FormRequests) para evitar ataques de XSS e injeção de scripts.
+* **Proteção de Mass-Assignment:** É terminantemente proibido o uso de protected $guarded = []; nos Models. Use estritamente a propriedade protected $fillable = [...] especificando campo por campo que pode ser escrito.
+* **Rate Limiting:** Configurar limitadores de requisições extremamente agressivos em todas as rotas de autenticação, registro e recuperação de senha para mitigar ataques de força bruta e timing attacks.
+
+###############################################################################
+## 5. [INTEGRIDADE & REGRAS LEGAIS] TRANSAÇÕES E CONSENTIMENTO
+###############################################################################
+
+* **Transações de Banco de Dados:** Fluxos de persistência que envolvam múltiplas tabelas, manipulação de dados sensíveis ou geração de pedidos/faturamento devem ser executados obrigatoriamente dentro de uma transação ativa: DB::transaction(function () { ... });.
+* **Direito ao Esquecimento (Exclusão de Contas):** Em caso de solicitação de exclusão, dados financeiros, fiscais e de vendas não podem ser apagados fisicamente (Hard Delete). Aplique SoftDeletes nas tabelas permitidas ou faça a anonimização de dados pessoais substituindo os campos estruturados como _encrypted pelo valor literal [ANONYMIZED].
+* **Auditoria de Consentimento:** Registrar todo aceite de termos e políticas na tabela visitor_legal_consents utilizando a estrutura de paridade para identificar o usuário de forma segura (armazenando ip_hash e ip_encrypted). O user_agent e dados de geolocalização aproximada do IP podem ser mantidos em texto puro.
+* **Políticas Dinâmicas:** Manter e exibir de forma dinâmica as páginas de Termos de Uso e Políticas de Privacidade com base no histórico de consentimento.
+
+###############################################################################
+## 6. [SEO & GOVERNANÇA] OTIMIZAÇÃO E PROPRIEDADE INTELECTUAL
+###############################################################################
+
+* **SEO Integrado:** Toda entidade pública do sistema (ex: produtos, lojas públicas) deve possuir relacionamento direto com uma tabela polimórfica seo_metadatas (campos: meta_title, meta_description, h1_text, schema_markup).
+* **Crawlers e Sitemaps:** Sitemaps (sitemap.xml) devem ser gerados dinamicamente. O arquivo robots.txt deve bloquear a varredura de painéis administrativos e rotas internas de checkout adicionando a instrução noindex, nofollow.
+* **Licenciamento:** O projeto deve conter o arquivo LICENSE com a licença CC BY-NC-SA 4.0 localizado na raiz.
+* **Footer de Direitos Autorais:** O rodapé do painel público e privado (Footer.vue) deve conter exatamente a assinatura:
+  Copyright (c) 2026 Luiz Eduardo T. Silva. Todos os direitos reservados.
+* **Marcas Forenses:** Inserir a linha de comentário // Copyright (c) 2026 Luiz Eduardo T. Silva. Todos os direitos reservados. no cabeçalho ou rodapé de pelo menos dois arquivos críticos de backend do projeto. O assistente deve verificar e preservar essa linha em cada alteração desses arquivos.
+
+###############################################################################
+## 7. [MONITORAMENTO, TESTES & DOCUMENTAÇÃO]
+###############################################################################
+
+* **Monitoramento Local (Grafana & Redis):** Instalar e configurar localmente o Grafana integrado ao monitoramento de filas e performance do Redis. O monitoramento deve funcionar apenas em ambiente local de desenvolvimento.
+* **Documentação Viva (README):** Sempre que adicionar uma nova dependência, fluxo ou estrutura técnica, atualize o README.md explicando detalhadamente os pré-requisitos, processos de instalação locais, comandos para iniciar os testes no Playwright e orientações de inicialização dos containers Docker.
+
+###############################################################################
+## 8. [CI/CD] DEPLOY ATÔMICO E INTEGRAÇÃO CONTÍNUA
+###############################################################################
+
+* **Pipeline GitHub Actions:** Toda a entrega de código em produção deve seguir o padrão de deploy atômico via CI/CD, estruturado sob as pastas:
+  * /releases/ (armazena as versões numeradas/datadas do projeto).
+  * /shared/ (armazena arquivos globais imutáveis e persistentes, como .env, .env.docker, docker-compose.yml e o diretório de uploads storage).
+  * /current/ (link simbólico apontando sempre para a última release estável).
+* **Regra de Links Simbólicos do Storage:** Como o comando nativo php artisan storage:link gera links relativos baseados na pasta atual e falha na estrutura atômica /shared, o script de deploy deve criar manualmente os links simbólicos de forma absoluta: O link simbólico deve apontar a pasta public/storage da nova release diretamente para a pasta absoluta de armazenamento persistente /var/www/seu-projeto/shared/storage/app/public.
+
+###############################################################################
+PART 2: ESPECIFICAÇÕES TÉCNICAS E REGRAS DE NEGÓCIO DO PROJETO (HERDADO)
+###############################################################################
 
 Controle de Acesso e Governança (Níveis de Usuário)
 

@@ -8,7 +8,8 @@
           <div class="flex items-center gap-2.5 mb-4">
             <div class="w-8 h-8 bg-gradient-to-br from-emerald-500 to-teal-600 rounded-lg flex items-center justify-center">
               <svg class="w-4 h-4 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4.26 10.147a60.438 60.438 0 0 0-.491 6.347A48.62 48.62 0 0 1 12 20.904a48.62 48.62 0 0 1 8.232-4.41 60.46 60.46 0 0 0-.491-6.347m-15.482 0a50.636 50.636 0 0 0-2.658-.813A59.906 59.906 0 0 1 12 3.493a59.903 59.903 0 0 1 10.399 5.84c-.896.248-1.783.52-2.658.814m-15.482 0A50.717 50.717 0 0 1 12 13.489a50.702 50.702 0 0 1 7.74-3.342" />
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" />
               </svg>
             </div>
             <span class="text-lg font-bold text-white">Blink</span>
@@ -24,13 +25,13 @@
           <h3 class="text-sm font-semibold text-white uppercase tracking-wider mb-4">Links</h3>
           <ul class="space-y-2">
             <li>
-              <router-link to="/" class="text-sm text-gray-400 hover:text-emerald-400 transition-colors">Início</router-link>
+              <router-link to="/" class="text-sm text-gray-400 hover:text-emerald-400 transition-colors">{{ ui.nav.home }}</router-link>
             </li>
             <li>
-              <router-link to="/login" class="text-sm text-gray-400 hover:text-emerald-400 transition-colors">Entrar</router-link>
+              <router-link to="/login" class="text-sm text-gray-400 hover:text-emerald-400 transition-colors">{{ ui.nav.login }}</router-link>
             </li>
             <li>
-              <router-link to="/register" class="text-sm text-gray-400 hover:text-emerald-400 transition-colors">Cadastre-se</router-link>
+              <router-link to="/register" class="text-sm text-gray-400 hover:text-emerald-400 transition-colors">{{ ui.nav.register }}</router-link>
             </li>
           </ul>
         </div>
@@ -57,11 +58,14 @@
 
       <div class="border-t border-gray-800 pt-8 flex flex-col sm:flex-row items-center justify-between gap-4">
         <p class="text-sm text-gray-500">
-          &copy; {{ year }} Blink. Todos os direitos reservados.
+          {{ ui.footer.copyright.replace(':year', String(year)) }}
+        </p>
+        <p class="text-xs text-gray-600">
+          Copyright (c) 2026 Luiz Eduardo T. Silva. Todos os direitos reservados.
         </p>
         <div class="flex items-center gap-4 text-sm text-gray-500">
-          <router-link to="/terms-of-use" class="hover:text-emerald-400 transition-colors">Termos de Uso</router-link>
-          <router-link to="/privacy-policy" class="hover:text-emerald-400 transition-colors">Privacidade</router-link>
+          <router-link to="/terms-of-use" class="hover:text-emerald-400 transition-colors">{{ ui.footer.terms }}</router-link>
+          <router-link to="/privacy-policy" class="hover:text-emerald-400 transition-colors">{{ ui.footer.privacy }}</router-link>
         </div>
 
       </div>
@@ -73,6 +77,10 @@
 /**
  * Footer público - rodapé com tema hospitalar/saúde.
  * Usado em páginas não autenticadas (Home, Login, Register).
+ * Suporte a internacionalização (pt, en, es).
  */
+import { useI18n } from '../composables/useI18n'
+
+const { ui } = useI18n()
 const year = new Date().getFullYear()
 </script>

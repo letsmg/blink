@@ -1,0 +1,113 @@
+name: blink-hom
+
+services:  
+  app:
+    container_name: blinkapp-hom
+    build:
+      context: .
+      dockerfile: Dockerfile      
+    image: blinkapp-hom:latest
+    restart: unless-stopped
+    working_dir: /var/www
+    volumes:
+      # Aponta para o código da release atual (raiz de current)
+      - .:/var/www
+      # Monta o .env real do host diretamente dentro do container em /var/www/.env
+      - /var/www/blink-hom/shared/.env:/var/www/.env
+      # Isola o storage na pasta shared para não perder arquivos nos deploys
+      - /var/www/blink-hom/shared/storage:/var/www/storage
+      - ./docker/php/php.ini:/usr/local/etc/php/conf.d/blink.ini:ro
+    environment:
+      - APP_ENV=staging
+      - APP_DEBUG=true
+      - DB_HOST=blink-psql-hom
+      - DB_PORT=5432 # Dentro da rede do Docker a porta do Postgres é 5432 (5451 é apenas no Host)
+      - DB_DATABASE=${DB_DATABASE:-blink_db}
+      - DB_USERNAME=${DB_USERNAME:-blink_user}
+      - DB_PASSWORD=${DB_PASSWORD}
+      - REDIS_HOST=blink-redis-hom
+      - REDIS_PORT=6379 # Dentro da rede do Docker a porta do Redis é 6379 (6382 é apenas no Host)
+      - SESSION_DRIVER=${SESSION_DRIVER:-database}
+      - CACHE_STORE=${CACHE_STORE:-file}
+      - QUEUE_CONNECTION=${QUEUE_CONNECTION:-database}
+    depends_on:
+      pgsql:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    networks:
+      - blink-net
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+
+  nginx:
+    image: nginx:alpine
+    container_name: blink-nginx-hom
+    restart: unless-stopped
+    ports:
+      - "${APP_PORT:-8010}:80"
+    volumes:
+      - .:/var/www:ro
+      # Monta o storage compartilhado na pasta /var/www/storage de forma estática
+      - /var/www/blink-hom/shared/storage:/var/www/storage:ro
+      - ./docker/nginx/default.conf:/etc/nginx/conf.d/default.conf:ro
+    depends_on:
+      - app
+    networks:
+      - blink-net
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+
+  pgsql:
+    image: postgres:16-alpine
+    container_name: blink-psql-hom
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: ${DB_USERNAME:-blink_user}
+      POSTGRES_PASSWORD: ${DB_PASSWORD}
+      POSTGRES_DB: ${DB_DATABASE:-blink_db}
+    volumes:
+      - pgsql-data:/var/lib/postgresql/data
+    ports:
+      - "${DB_PORT_EXTERNAL:-5451}:5432"
+    networks:
+      - blink-net
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${DB_USERNAME:-blink_user} -d ${DB_DATABASE:-blink_db}"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+  redis:
+    image: redis:7-alpine
+    container_name: blink-redis-hom
+    restart: unless-stopped
+    command: >
+      redis-server
+      --save 60 1
+      --loglevel warning
+      ${REDIS_PASSWORD:+"--requirepass ${REDIS_PASSWORD}"}
+    volumes:
+      - redis-data:/data
+    ports:
+      - "${REDIS_PORT_EXTERNAL:-6382}:6379"
+    networks:
+      - blink-net
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+volumes:
+  pgsql-data:
+    name: blink-pgsql-data-hom
+    external: true
+  redis-data:
+    name: blink-redis-data-hom
+    external: true
+
+networks:
+  blink-net:    
+    name: blink-net-hom
+    external: true

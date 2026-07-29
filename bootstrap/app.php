@@ -1,6 +1,9 @@
 <?php
 
 use App\Http\Middleware\CheckTermsAccepted;
+use App\Http\Middleware\SetPostgresSessionVariables;
+use App\Http\Middleware\SetVisitorLocale;
+use Illuminate\Http\Middleware\TrustProxies;
 use App\Http\Middleware\CheckTokenExpiration;
 use App\Http\Middleware\CheckUserRole;
 use App\Http\Middleware\InjectTokenFromCookie;
@@ -54,6 +57,21 @@ return Application::configure(basePath: dirname(__DIR__))
         $middleware->appendToGroup('api', [
             SetTokenCookie::class,
         ]);
+
+        // SetVisitorLocale - define o locale baseado no cookie visitor_id
+        $middleware->web(append: [
+            SetVisitorLocale::class,
+        ]);
+
+        // TrustProxies - detecta IP real atrás de proxy (nuvem, nginx, Cloudflare)
+        $middleware->trustProxies(
+            at: '*',
+            headers: Request::HEADER_X_FORWARDED_FOR | 
+                     Request::HEADER_X_FORWARDED_HOST | 
+                     Request::HEADER_X_FORWARDED_PORT | 
+                     Request::HEADER_X_FORWARDED_PROTO |
+                     Request::HEADER_X_FORWARDED_AWS_ELB
+        );
 
     })
     ->withExceptions(function (Exceptions $exceptions): void {

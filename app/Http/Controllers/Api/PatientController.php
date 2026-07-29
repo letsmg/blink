@@ -18,6 +18,61 @@ use Illuminate\Http\Request;
 class PatientController extends Controller
 {
     /**
+     * Lista todos os pacientes (área staff).
+     */
+    public function index(Request $request): JsonResponse
+    {
+        $query = \App\Models\Patient::with('user:id,display_name,email');
+
+        // Busca por nome (via relacionamento users.display_name)
+        if ($request->filled('search')) {
+            $term = $request->get('search');
+            $query->whereHas('user', function ($q) use ($term) {
+                $q->where('display_name', 'ilike', "%{$term}%");
+            });
+        }
+
+        $patients = $query->orderBy('created_at', 'desc')
+            ->paginate($request->get('per_page', 20));
+
+        return response()->json(['data' => $patients]);
+    }
+
+    /**
+     * Exibe um paciente específico (área staff).
+     */
+    public function show(int $id): JsonResponse
+    {
+        $patient = \App\Models\Patient::with('user:id,display_name,email')
+            ->findOrFail($id);
+
+        return response()->json(['data' => $patient]);
+    }
+
+    /**
+     * Atualiza dados de um paciente (área staff).
+     */
+    public function update(Request $request, int $id): JsonResponse
+    {
+        $patient = \App\Models\Patient::findOrFail($id);
+
+        $validated = $request->validate([
+            'main_complaint'   => ['nullable', 'string', 'max:1000'],
+            'clinical_history' => ['nullable', 'string', 'max:5000'],
+            'phone1'           => ['nullable', 'string', 'max:20'],
+            'phone2'           => ['nullable', 'string', 'max:20'],
+            'health_plan_id'   => ['nullable', 'exists:health_plans,id'],
+        ]);
+
+        $patient->update($validated);
+
+        return response()->json([
+            'message' => 'Paciente atualizado com sucesso!',
+            'data' => $patient->fresh()->load('user:id,display_name,email'),
+        ]);
+    }
+
+    /**
      * Lista profissionais disponíveis para o paciente enviar mensagens.
      */
     public function professionals(): JsonResponse

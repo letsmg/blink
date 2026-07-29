@@ -20,6 +20,7 @@ class Professional extends Model
         'professional_document',
         'phone1',
         'phone2',
+        'has_telehealth',
         'is_active',
     ];
 

@@ -1,7 +1,11 @@
 <?php
 
+use App\Http\Controllers\Api\AccountPayableController;
+use App\Http\Controllers\Api\AccountReceivableController;
+use App\Http\Controllers\Api\CepController;
 use App\Http\Controllers\Api\AppointmentController;
 use App\Http\Controllers\Api\AuthController;
+use App\Http\Controllers\Api\ConsultationRoomController;
 use App\Http\Controllers\Api\MessageController;
 use App\Http\Controllers\Api\PatientController;
 use App\Http\Controllers\Api\ProfessionalController;
@@ -10,6 +14,7 @@ use App\Http\Controllers\Api\TermController;
 use App\Http\Controllers\Api\UnavailabilityPeriodController;
 use App\Http\Controllers\Api\UserController;
 use App\Http\Middleware\CheckUserRole;
+use App\Http\Middleware\SetPostgresSessionVariables;
 use Illuminate\Support\Facades\Route;
 
 /*
@@ -25,8 +30,14 @@ use Illuminate\Support\Facades\Route;
 // =============================================
 // Public Routes (No authentication required)
 // =============================================
-Route::post('/register', [AuthController::class, 'register']);
-Route::post('/login', [AuthController::class, 'login']);
+// Rate limiting agressivo para mitigar brute-force (clinerules §4)
+Route::middleware('throttle:auth')->group(function () {
+    Route::post('/register', [AuthController::class, 'register']);
+    Route::post('/login', [AuthController::class, 'login']);
+});
+
+// CEP lookup — público, usado em formulários com endereço
+Route::get('/cep/{cep}', [CepController::class, 'lookup']);
 
 // Terms acceptance (public - for non-authenticated visitors)
 Route::post('/accept-terms', [TermController::class, 'accept']);
@@ -35,7 +46,7 @@ Route::get('/check-terms', [TermController::class, 'check']);
 // =============================================
 // Authenticated Routes
 // =============================================
-Route::middleware('auth:sanctum')->group(function () {
+Route::middleware(['auth:sanctum', SetPostgresSessionVariables::class])->group(function () {
 
     // Auth & Profile
     Route::post('/logout', [AuthController::class, 'logout']);
@@ -120,6 +131,55 @@ Route::middleware('auth:sanctum')->group(function () {
                 Route::get('/patients', [ReportsController::class, 'patients']);
                 Route::get('/professionals', [ReportsController::class, 'professionals']);
             });
+
+            // =============================================
+            // Financial Module (Accounts Payable & Receivable)
+            // =============================================
+            // Contas a Pagar
+            Route::prefix('accounts-payable')->group(function () {
+                Route::get('/', [AccountPayableController::class, 'index']);
+                Route::post('/', [AccountPayableController::class, 'store']);
+                Route::get('/totals', [AccountPayableController::class, 'totals']);
+                Route::put('/{account}', [AccountPayableController::class, 'update']);
+                Route::post('/{account}/pay', [AccountPayableController::class, 'markAsPaid']);
+                Route::delete('/{account}', [AccountPayableController::class, 'destroy']);
+            });
+
+            // Contas a Receber
+            Route::prefix('accounts-receivable')->group(function () {
+                Route::get('/', [AccountReceivableController::class, 'index']);
+                Route::post('/', [AccountReceivableController::class, 'store']);
+                Route::get('/totals', [AccountReceivableController::class, 'totals']);
+                Route::put('/{account}', [AccountReceivableController::class, 'update']);
+                Route::post('/{account}/pay', [AccountReceivableController::class, 'markAsPaid']);
+                Route::delete('/{account}', [AccountReceivableController::class, 'destroy']);
+            });
+
+            // =============================================
+            // Teleatendimento - Salas de Consulta Virtual (Jitsi Meet)
+            // =============================================
+            Route::prefix('consultation-rooms')->group(function () {
+                // Rotas com caminho fixo DEVEM vir antes das rotas com parâmetro {room}
+                // para evitar que Laravel capture 'appointments' como ID de sala.
+                Route::post('/appointments/{appointment}', [ConsultationRoomController::class, 'store']);
+                Route::get('/appointments/{appointment}', [ConsultationRoomController::class, 'byAppointment']);
+                // Rotas com parâmetro {room}
+                Route::get('/{room}', [ConsultationRoomController::class, 'show']);
+                Route::post('/{room}/start', [ConsultationRoomController::class, 'start']);
+                Route::post('/{room}/end', [ConsultationRoomController::class, 'end']);
+            });
         });
+
+    // =============================================
+    // Teleatendimento - Rotas de paciente (acesso à própria sala)
+    // =============================================
+    // Rotas acessíveis a qualquer usuário autenticado para visualizar sua sala.
+    // A validação de permissão (paciente vinculado, profissional ou staff) é feita no controller.
+    Route::prefix('consultation-rooms')->group(function () {
+        // Rotas com caminho fixo primeiro
+        Route::get('/appointments/{appointment}', [ConsultationRoomController::class, 'byAppointment']);
+        // Rota com parâmetro depois
+        Route::get('/{room}', [ConsultationRoomController::class, 'show']);
+    });
 
 });
