@@ -157,11 +157,11 @@ async function handleLogin() {
 
     localStorage.setItem('user', JSON.stringify(data.user))
 
-    // Redirect baseado no role (1=Admin, 2=AdminOperacional, 3=Professional, 4=Patient)
+    // Redirect baseado no slug do role ('patient' = Paciente, demais = Staff)
     const role = data.user.role
-    if (role === 4) {
+    if (role === 'patient') {
       router.push('/patient/dashboard')
-    } else if (role >= 1 && role <= 3) {
+    } else {
       router.push('/staff/dashboard')
     }
   } catch (e: any) {

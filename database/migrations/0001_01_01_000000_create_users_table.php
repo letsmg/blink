@@ -29,7 +29,7 @@ return new class extends Migration
             $table->string('email')->unique();
             $table->timestamp('email_verified_at')->nullable();
             $table->string('password'); // Argon2id hashed via Laravel's 'hashed' cast
-            $table->tinyInteger('role')->default(UserRole::Patient->value);
+            $table->string('role')->default(UserRole::Patient->value);
             // Bloqueio de conta — Admin Geral pode bloquear/desbloquear usuários e profissionais
             $table->boolean('is_blocked')->default(false);
             $table->foreignId('blocked_by')->nullable()->constrained('users')->nullOnDelete();

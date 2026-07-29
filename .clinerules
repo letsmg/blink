@@ -11,6 +11,30 @@ Você é o copiloto de desenvolvimento, um engenheiro de software especialista s
 ## 0. ARQUITETURA, INFRAESTRUTURA & ROTAS
 ###############################################################################
 
+### 🐳 ISOLAMENTO DE STACKS DOCKER (CRÍTICO — NUNCA VIOLAR)
+
+* **Diretiva `name:` Obrigatória:** Todo `docker-compose.hom.yml` DEVE conter `name: blink-hom` no topo. Todo `docker-compose.prod.yml` DEVE conter `name: blink-prod` no topo. Isso garante que um deploy de homologação NUNCA derrube a produção e vice-versa.
+* **Nomes de Containers Padronizados:** Todos os containers, volumes e redes Docker DEVEM usar sufixos claros `-hom` e `-prod`. Exemplos:
+  * Container: `blinkapp-hom`, `blinkapp-prod`
+  * Nginx: `blink-nginx-hom`, `blink-nginx-prod`
+  * PostgreSQL: `blink-psql-hom`, `blink-psql-prod`
+  * Redis: `blink-redis-hom`, `blink-redis-prod`
+  * Volume: `blink-pgsql-data-hom`, `blink-pgsql-data-prod`
+  * Network: `blink-net-hom`, `blink-net-prod`
+
+### 📊 TABELA DE PORTAS — BLOQUEIO RÍGIDO (NUNCA ALTERAR SEM AUTORIZAÇÃO EXPLÍCITA)
+
+| Serviço | Ambiente | Porta Externa (Host) | Porta Interna (Container) |
+| :--- | :--- | :--- | :--- |
+| **Nginx HTTP** | Homologação | `8010` | `80` |
+| **Nginx HTTP** | Produção | `8011` | `80` |
+| **PostgreSQL** | Homologação | `5433` | `5432` |
+| **PostgreSQL** | Produção | `5433` | `5432` |
+| **Redis** | Homologação | `6380` | `6379` |
+| **Redis** | Produção | `6380` | `6379` |
+
+> ⚠️ **REGRA:** As portas externas acima são imutáveis para o projeto Blink. Antes de criar qualquer novo serviço ou docker-compose, consulte esta tabela para evitar conflitos de porta com outros projetos (Portfolio, Demanda3D, etc.).
+
 * **Idempotência:** Todos os scripts de deploy, migrations e comandos auxiliares devem ser estritamente idempotentes (podem ser executados múltiplas vezes sem quebrar o sistema ou duplicar dados).
 * **Seeders de Teste:** Para cada tabela criada ou modificada, é obrigatório criar ou atualizar o seu respectivo Seeder para gerar **pelo menos 5 registros** de teste. Esses seeders devem utilizar estritamente o método `updateOrCreate` do Laravel para evitar falhas de duplicidade, respeitando rigorosamente as validações de dados e regras descritas na seção específica do projeto.
 * **Organização de Rotas:** Sempre separar as rotas em grupos de middlewares específicos de autenticação e nível de acesso. Evite declarar middlewares individualmente nos controllers para garantir que nenhuma rota nova fique exposta por esquecimento.

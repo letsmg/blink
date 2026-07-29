@@ -1,181 +1,213 @@
-name: 🚀 CI/CD Deploy Atômico Blink
+name: 🚀 Build & Deploy Blink (Atômico & Ambientes)
 
 on:
   push:
-    branches: [hom, main]
+    branches: [main, hom]
 
 jobs:
-  deploy:
+  build-and-pack:
     runs-on: ubuntu-latest
+
     steps:
       - name: 📥 Checkout code
         uses: actions/checkout@v4
 
-      - name: 🐘 Configurar PHP (Para ferramentas no Runner)
+      - name: 🐘 Setup PHP
         uses: shivammathur/setup-php@v2
         with:
-          php-version: "8.4"
-          extensions: mbstring, xml, ctype, iconv, pgsql, pdo_pgsql
+          php-version: '8.4'
+          extensions: mbstring, bcmath, gd, zip, pgsql
 
-      - name: 📦 Instalar dependências do Composer (Modo Produção)
-        run: |
-          composer install --no-dev --optimize-autoloader --no-interaction --prefer-dist
+      - name: 📦 Install Composer
+        run: composer install --no-dev --optimize-autoloader --no-interaction
 
-      - name: 🟢 Configurar Node.js (Para os assets/frontend)
+      - name: 🟢 Setup Node.js
         uses: actions/setup-node@v4
         with:
           node-version: 20
-          cache: "npm"
+          cache: 'npm'
 
-      - name: 📦 Instalar dependências do Node e Rodar Builds do Vite
+      - name: 🔨 Build Frontend (Vite)
         run: |
-          npm ci
+          npm install
           npm run build
 
-      - name: 🤐 Criar Pacote de Deploy Compactado (Pronto para Uso)
+      - name: 🤐 Criar Pacote de Deploy
         run: |
-          mkdir build-tmp
+          zip -r deploy.zip . \
+            -x ".git/*" \
+            -x "node_modules/*" \
+            -x ".github/*" \
+            -x "tests/*" \
+            -x ".env*" \
+            -x "storage/framework/*" \
+            -x "storage/logs/*"
 
-          # Inclui as pastas essenciais do projeto Laravel + Build do Vite + Arquivos Docker
-          cp -r app bootstrap config database public resources routes storage vendor build-tmp/          
-          cp artisan composer.json composer.lock package.json build-tmp/          
-          [ -f Dockerfile ] && cp Dockerfile build-tmp/ || true
-          [ -f docker-compose.yml ] && cp docker-compose.yml build-tmp/ || true
-
-          # Remove o link gerado localmente para evitar conflito com o link simbólico atômico do servidor
-          rm -rf build-tmp/public/storage
-          rm -f build-tmp/public/hot
-
-          # Compacta o pacote limpo
-          cd build-tmp
-          zip -r ../deploy-blink.zip .
-          cd ..
-
-      - name: 🔑 Configurar Chave SSH
+      - name: 🔑 Configure SSH
         uses: shimataro/ssh-key-action@v2
         with:
           key: ${{ secrets.SSH_PRIVATE_KEY }}
           known_hosts: ${{ secrets.SSH_KNOWN_HOSTS }}
 
-      - name: 🚀 Transferir Pacote e Executar Deploy Atômico no Servidor
+      - name: 🚀 Deploy Atômico com Versões Sequenciais
         run: |
           SERVER_IP="${{ secrets.SERVER_IP }}"
           BRANCH_NAME="${{ github.ref_name }}"
 
-          # Define o diretório base com base na branch (hom -> dev-blink | main -> blink)
+          # Define a pasta raiz com base no branch solicitado
           if [ "$BRANCH_NAME" = "main" ]; then
-            TARGET_DIR="/var/www/blink"
+            TARGET_ROOT="/var/www/blink"
+            ENV_LABEL="prod"
           else
-            TARGET_DIR="/var/www/dev-blink"
+            TARGET_ROOT="/var/www/blink-hom"
+            ENV_LABEL="hom"
           fi
 
-          echo "🎯 Alvo do Deploy: $TARGET_DIR (Branch: $BRANCH_NAME)"
+          echo "Target Path: $TARGET_ROOT (Branch: $BRANCH_NAME)"
 
-          # Envia o arquivo zip para a pasta tmp do servidor via SCP
-          scp -o StrictHostKeyChecking=no deploy-blink.zip ubuntu@$SERVER_IP:/tmp/
+          scp -o StrictHostKeyChecking=no deploy.zip ubuntu@$SERVER_IP:/tmp/blink-deploy-${ENV_LABEL}.zip
 
-          # Executa o script atômico via SSH
           ssh -o StrictHostKeyChecking=no ubuntu@$SERVER_IP << EOF
             set -e
 
-            BASE_DIR="$TARGET_DIR"
-            RELEASES_DIR="\$BASE_DIR/releases"
-            SHARED_DIR="\$BASE_DIR/shared"
-            CURRENT_DIR="\$BASE_DIR/current"
-            RELEASE_NAME="\$(date +%Y%m%d%H%M%S)"
-            NEW_RELEASE_DIR="\$RELEASES_DIR/\$RELEASE_NAME"
+            ROOT_PATH="${TARGET_ROOT}"
+            RELEASES_PATH="\${ROOT_PATH}/releases"
+            SHARED_PATH="\${ROOT_PATH}/shared"
+            CURRENT_LINK="\${ROOT_PATH}/current"
 
-            # 1. Garante que o unzip está instalado
-            if ! command -v unzip &> /dev/null; then
-                sudo apt-get update -y && sudo apt-get install unzip -y
+            DATE_PREFIX=\$(date +%Y%m%d%H%M%S)
+
+            echo "📦 Criando estrutura em \${ROOT_PATH}..."
+
+            sudo mkdir -p \${RELEASES_PATH}
+            sudo mkdir -p \${SHARED_PATH}/storage/framework/cache
+            sudo mkdir -p \${SHARED_PATH}/storage/framework/sessions
+            sudo mkdir -p \${SHARED_PATH}/storage/framework/views
+            sudo mkdir -p \${SHARED_PATH}/storage/logs
+            sudo mkdir -p \${SHARED_PATH}/storage/app/public
+
+            if [ ! -f "\${SHARED_PATH}/.env" ]; then
+              echo "❌ Arquivo shared/.env não encontrado em \${SHARED_PATH}"
+              exit 1
             fi
 
-            # 2. Cria a estrutura atômica básica e pastas do shared se não existirem
-            sudo mkdir -p "\$RELEASES_DIR" "\$SHARED_DIR/storage/app/public" "\$SHARED_DIR/storage/framework/cache" "\$SHARED_DIR/storage/framework/sessions" "\$SHARED_DIR/storage/framework/views" "\$SHARED_DIR/storage/logs" "\$SHARED_DIR/bootstrap/cache"
-
-            # 3. Garante que o arquivo .env compartilhado existe
-            if [ ! -f "\$SHARED_DIR/.env" ]; then
-                echo "⚠️ Arquivo .env não encontrado em shared/. Criando arquivo vazio..."
-                sudo touch "\$SHARED_DIR/.env"
-            fi
-
-            # 4. Cria a nova pasta para esta release específica
-            sudo mkdir -p "\$NEW_RELEASE_DIR"
-
-            # 5. Descompacta o pacote na nova release
-            echo "📂 Descompactando pacote na release \$RELEASE_NAME..."
-            sudo unzip -o /tmp/deploy-blink.zip -d "\$NEW_RELEASE_DIR"
-
-            # 6. Conecta os arquivos compartilhados (.env, storage e bootstrap/cache) via links simbólicos
-            echo "🔗 Configurando links compartilhados (Shared & Storage)..."
+            echo "🔢 Calculando número sequencial da release..."
+            cd \${RELEASES_PATH}
             
-            sudo rm -f "\$NEW_RELEASE_DIR/.env"
-            sudo ln -s "\$SHARED_DIR/.env" "\$NEW_RELEASE_DIR/.env"
-
-            sudo rm -rf "\$NEW_RELEASE_DIR/storage"
-            sudo ln -s "\$SHARED_DIR/storage" "\$NEW_RELEASE_DIR/storage"
-
-            sudo rm -rf "\$NEW_RELEASE_DIR/bootstrap/cache"
-            sudo ln -s "\$SHARED_DIR/bootstrap/cache" "\$NEW_RELEASE_DIR/bootstrap/cache"
-
-            # Garante que serviços nativos antigos não fiquem travando as portas do Docker
-            sudo systemctl stop redis-server 2>/dev/null || true
-            sudo systemctl disable redis-server 2>/dev/null || true
-            sudo systemctl stop postgresql 2>/dev/null || true
-            sudo systemctl disable postgresql 2>/dev/null || true
-
-            # 7. Sobe/Atualiza o ambiente Docker do projeto antes de rodar comandos da aplicação
-            echo "🐳 Subindo containers Docker do projeto..."
-            cd "\$NEW_RELEASE_DIR"
-            if [ -f "docker-compose.yml" ]; then
-                sudo rm -f docker-compose.override.yml
-                sudo docker compose up -d --build
+            # Pega a última pasta criada no geral
+            LAST_DIR=\$(ls -d *-* 2>/dev/null | sort | tail -n 1)
+            
+            if [ -z "\${LAST_DIR}" ]; then
+              NEXT_SEQ="001"
+            else
+              LAST_SEQ=\$(echo \${LAST_DIR} | awk -F'-' '{print \$NF}')
+              # Remove zeros à esquerda para evitar erro de octal e soma 1
+              CLEAN_SEQ=\$(echo \${LAST_SEQ} | sed 's/^0*//')
+              if [ -z "\${CLEAN_SEQ}" ] || [ "\${CLEAN_SEQ}" = "" ]; then
+                CLEAN_SEQ=0
+              fi
+              NEXT_VAL=\$((CLEAN_SEQ + 1))
+              NEXT_SEQ=\$(printf "%03d" \${NEXT_VAL})
             fi
 
-            # 8. Ajusta permissões do diretório shared e da nova release para o www-data
-            sudo chown -R www-data:www-data "\$SHARED_DIR"
-            sudo chown -R www-data:www-data "\$NEW_RELEASE_DIR"
-            sudo chmod -R 775 "\$SHARED_DIR"
+            RELEASE_NAME="\${DATE_PREFIX}-\${NEXT_SEQ}"
+            NEW_RELEASE="\${RELEASES_PATH}/\${RELEASE_NAME}"
 
-            # 9. Executa comandos do Laravel na nova release lendo o .env do shared
-            echo "⚙️ Executando otimizações e migrações..."
-            cd "\$NEW_RELEASE_DIR"
+            echo "📦 Criando nova release: \${RELEASE_NAME}"
 
-            sudo rm -f bootstrap/cache/config.php bootstrap/cache/routes-v7.php
-            sudo -u www-data php artisan config:clear
-            sudo -u www-data php artisan cache:clear
-            sudo -u www-data php artisan route:clear
+            sudo mkdir -p \${NEW_RELEASE}
+            sudo unzip -oq /tmp/blink-deploy-${ENV_LABEL}.zip -d \${NEW_RELEASE}
 
-            # Migrações e Seeders (Com os containers já rodando)
-            sudo -u www-data php artisan migrate --force
-            sudo -u www-data php artisan db:seed --force
+            echo "⚙️ Configurando o Docker Compose correto para o ambiente (${ENV_LABEL})..."
+            cd \${NEW_RELEASE}
+            
+            # Garante que o usuário ubuntu tem permissão de escrita temporária nesta pasta
+            sudo chown -R ubuntu:ubuntu \${NEW_RELEASE}
 
-            # Link simbólico oficial do storage para a pasta public
-            sudo rm -rf "\$NEW_RELEASE_DIR/public/storage"
-            sudo ln -s "\$SHARED_DIR/storage/app/public" "\$NEW_RELEASE_DIR/public/storage"
+            if [ "${ENV_LABEL}" = "prod" ]; then
+              if [ -f "docker-compose.prod.yml" ]; then
+                cp docker-compose.prod.yml docker-compose.yml
+              elif [ -f "docker/docker-compose.prod.yml" ]; then
+                cp docker/docker-compose.prod.yml docker-compose.yml
+              elif [ -f "docker-compose.yml" ]; then
+                cp docker-compose.yml docker-compose.yml
+              else
+                echo "❌ AVISO: Nenhum docker-compose de produção foi encontrado!"
+                exit 1
+              fi
+            else
+              if [ -f "docker-compose.hom.yml" ]; then
+                cp docker-compose.hom.yml docker-compose.yml
+              elif [ -f "docker/docker-compose.hom.yml" ]; then
+                cp docker/docker-compose.hom.yml docker-compose.yml
+              elif [ -f "docker-compose.yml" ]; then
+                cp docker-compose.yml docker-compose.yml
+              else
+                echo "❌ AVISO: Nenhum docker-compose de homologação foi encontrado!"
+                exit 1
+              fi
+            fi
 
-            # Otimizações de Produção
-            sudo -u www-data php artisan config:cache
-            sudo -u www-data php artisan route:cache
-            sudo -u www-data php artisan view:cache
+            echo "📄 Arquivo docker-compose final gerado com sucesso:"
+            ls -la docker-compose.yml
 
-            # 10. Troca atômica do link simbólico 'current' (Garantindo também a pasta e permissões corretas)
-            echo "🔄 Realizando a troca atômica (symlink current)..."
-            sudo mkdir -p "\$CURRENT_DIR"
-            sudo chown -R www-data:www-data "\$CURRENT_DIR"
-            sudo ln -sfn "\$NEW_RELEASE_DIR" "\$CURRENT_DIR"
+            echo "🛑 Parando containers antigos antes de subir a nova versão..."
+            if [ -d "\${CURRENT_LINK}/docker" ] && [ -f "\${CURRENT_LINK}/docker/docker-compose.yml" ]; then
+              cd \${CURRENT_LINK}/docker && docker compose --env-file \${SHARED_PATH}/.env down --remove-orphans || true
+            elif [ -f "\${CURRENT_LINK}/docker-compose.yml" ]; then
+              cd \${CURRENT_LINK} && docker compose --env-file \${SHARED_PATH}/.env down --remove-orphans || true
+            fi
 
-            # 11. Governança e Limpeza de Releases Antigas (Mantém apenas as últimas 5)
-            echo "🧹 Limpando releases antigas (mantendo as 5 mais recentes)..."
-            cd "\$RELEASES_DIR"
-            sudo ls -t | tail -n +6 | xargs -I {} sudo rm -rf {} || true
+            echo "🐳 Subindo containers Docker na nova release..."
+            cd \${NEW_RELEASE}
+            if [ -f "docker-compose.yml" ]; then
+              docker compose --env-file \${SHARED_PATH}/.env up -d --build --remove-orphans
+            fi
 
-            # Limpa arquivo temporário
-            rm -f /tmp/deploy-blink.zip
+            echo "🖼️ Sincronizando uploads..."
+            if [ -d "\${NEW_RELEASE}/storage/app/public" ]; then
+              sudo cp -R \${NEW_RELEASE}/storage/app/public/. \${SHARED_PATH}/storage/app/public/ || true
+            fi
 
-            echo "✅ Deploy atômico finalizado com sucesso para \$TARGET_DIR!"
+            echo "🔗 Criando links simbólicos..."
+            sudo ln -sfn \${SHARED_PATH}/.env \${NEW_RELEASE}/.env
+
+            sudo rm -rf \${NEW_RELEASE}/storage
+            sudo ln -sfn \${SHARED_PATH}/storage \${NEW_RELEASE}/storage
+
+            sudo rm -rf \${NEW_RELEASE}/public/storage
+            sudo ln -sfn \${SHARED_PATH}/storage/app/public \${NEW_RELEASE}/public/storage
+
+            echo "🔐 Ajustando permissões..."
+            sudo chown -R ubuntu:www-data \${ROOT_PATH}
+            sudo chmod -R 775 \${SHARED_PATH}/storage
+            sudo chmod -R 775 \${NEW_RELEASE}/bootstrap/cache
+
+            cd \${NEW_RELEASE}
+
+            echo "🧹 Limpando caches..."
+            php artisan config:clear || true
+            php artisan route:clear || true
+            php artisan view:clear || true
+            php artisan cache:clear || true
+
+            echo "🗄️ Executando migrations..."
+            php artisan migrate --force
+            php artisan db:seed --force
+            
+            echo "⚡ Gerando caches..."
+            php artisan config:cache
+            php artisan route:cache
+            php artisan view:cache
+
+            echo "🔀 Realizando swap atômico..."
+            sudo ln -sfn \${NEW_RELEASE} \${CURRENT_LINK}
+
+            echo "🧹 Removendo releases antigas..."
+            cd \${RELEASES_PATH}
+            ls -t | tail -n +4 | xargs -r sudo rm -rf --
+
+            sudo rm -f /tmp/blink-deploy-${ENV_LABEL}.zip
+
+            echo "✅ Deploy concluído com sucesso em \${ROOT_PATH}!"
           EOF
-
-      - name: 🧹 Limpar Runner do GitHub
-        if: always()
-        run: rm -rf build-tmp deploy-blink.zip

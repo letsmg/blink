@@ -5,17 +5,18 @@ namespace App\Enums;
 /**
  * UserRole enum - Rigid access control for the health system.
  * 
- * 1 => Admin (Administrador Geral) - Visualiza todos os dados, bloqueia sistema/profissionais
- * 2 => AdminOperational (Administrador Operacional) - Não pode gerenciar outros admins
- * 3 => Professional (Profissional de Saúde) - Gerencia agenda, diagnósticos e histórico de seus pacientes
- * 4 => Patient (Paciente) - Login próprio, gerencia seus dados, consultas e visualiza diagnósticos
+ * Slugs compatíveis com PostgreSQL RLS (Row Level Security):
+ * - 'admin'   => Administrador Geral - Acesso total a todos os dados do sistema
+ * - 'adminop' => Administrador Operacional - Acesso gerencial/operacional (agendas, cadastros), exceto configs globais
+ * - 'prof'    => Profissional de Saúde - Acesso restrito aos seus próprios agendamentos, pacientes e horários
+ * - 'patient' => Paciente - Acesso restrito exclusivamente aos seus próprios agendamentos e dados cadastrais
  */
-enum UserRole: int
+enum UserRole: string
 {
-    case Admin = 1;
-    case AdminOperational = 2;
-    case Professional = 3;
-    case Patient = 4;
+    case Admin = 'admin';
+    case AdminOperational = 'adminop';
+    case Professional = 'prof';
+    case Patient = 'patient';
 
     /**
      * Check if the role belongs to the Staff group (Admin, AdminOperational or Professional).

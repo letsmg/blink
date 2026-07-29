@@ -14,6 +14,7 @@ use App\Http\Controllers\Api\TermController;
 use App\Http\Controllers\Api\UnavailabilityPeriodController;
 use App\Http\Controllers\Api\UserController;
 use App\Http\Middleware\CheckUserRole;
+use App\Http\Middleware\SetPostgresSessionVariables;
 use Illuminate\Support\Facades\Route;
 
 /*
@@ -45,7 +46,7 @@ Route::get('/check-terms', [TermController::class, 'check']);
 // =============================================
 // Authenticated Routes
 // =============================================
-Route::middleware('auth:sanctum')->group(function () {
+Route::middleware(['auth:sanctum', SetPostgresSessionVariables::class])->group(function () {
 
     // Auth & Profile
     Route::post('/logout', [AuthController::class, 'logout']);

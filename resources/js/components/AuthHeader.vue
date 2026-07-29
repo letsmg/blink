@@ -280,14 +280,20 @@ const isSidebarOpen = ref(false)
 const isMobile = ref(false)
 
 const user = JSON.parse(localStorage.getItem('user') || '{}')
-const isStaff = computed(() => user.role === 1 || user.role === 2)
+// Slugs: 'admin', 'adminop', 'prof', 'patient'
+const isStaff = computed(() => ['admin', 'adminop', 'prof'].includes(user.role))
 const areaLabel = computed(() => (isStaff.value ? 'Área do Staff' : 'Área do Paciente'))
 const dashboardPath = computed(() => (isStaff.value ? '/staff/dashboard' : '/patient/dashboard'))
 
 const userName = computed(() => user.name || 'Usuário')
 const userRole = computed(() => {
-  const roles: Record<number, string> = { 0: 'Paciente', 1: 'Admin', 2: 'Operacional' }
-  return roles[user.role] || 'Staff'
+  const roles: Record<string, string> = {
+    'admin': 'Admin Geral',
+    'adminop': 'Admin Operacional',
+    'prof': 'Profissional',
+    'patient': 'Paciente',
+  }
+  return roles[user.role] || 'Usuário'
 })
 const userInitials = computed(() => {
   return (user.name || 'U').split(' ').map((s: string) => s[0]).slice(0, 2).join('').toUpperCase()

@@ -1,6 +1,7 @@
 <?php
 
 use App\Http\Middleware\CheckTermsAccepted;
+use App\Http\Middleware\SetPostgresSessionVariables;
 use App\Http\Middleware\SetVisitorLocale;
 use Illuminate\Http\Middleware\TrustProxies;
 use App\Http\Middleware\CheckTokenExpiration;
