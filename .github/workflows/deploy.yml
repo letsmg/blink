@@ -7,7 +7,6 @@ on:
 jobs:
   build-and-pack:
     runs-on: ubuntu-latest
-
     steps:
       - name: 📥 Checkout code
         uses: actions/checkout@v4
@@ -29,12 +28,12 @@ jobs:
 
       - name: 🔨 Build Frontend (Vite)
         run: |
-          npm install
+          npm install --legacy-peer-deps
           npm run build
 
       - name: 🤐 Criar Pacote de Deploy
         run: |
-          zip -r deploy.zip . \
+          zip -r deploy.zip . Dockerfile \
             -x ".git/*" \
             -x "node_modules/*" \
             -x ".github/*" \
@@ -54,7 +53,6 @@ jobs:
           SERVER_IP="${{ secrets.SERVER_IP }}"
           BRANCH_NAME="${{ github.ref_name }}"
 
-          # Define a pasta raiz com base no branch solicitado
           if [ "$BRANCH_NAME" = "main" ]; then
             TARGET_ROOT="/var/www/blink"
             ENV_LABEL="prod"
@@ -67,147 +65,233 @@ jobs:
 
           scp -o StrictHostKeyChecking=no deploy.zip ubuntu@$SERVER_IP:/tmp/blink-deploy-${ENV_LABEL}.zip
 
-          ssh -o StrictHostKeyChecking=no ubuntu@$SERVER_IP << EOF
+          ssh -o StrictHostKeyChecking=no ubuntu@$SERVER_IP "TARGET_ROOT='${TARGET_ROOT}' ENV_LABEL='${ENV_LABEL}' bash -s" << 'EOF'
             set -e
+            set -x
 
             ROOT_PATH="${TARGET_ROOT}"
-            RELEASES_PATH="\${ROOT_PATH}/releases"
-            SHARED_PATH="\${ROOT_PATH}/shared"
-            CURRENT_LINK="\${ROOT_PATH}/current"
+            RELEASES_PATH="${ROOT_PATH}/releases"
+            SHARED_PATH="${ROOT_PATH}/shared"
+            CURRENT_LINK="${ROOT_PATH}/current"
 
-            DATE_PREFIX=\$(date +%Y%m%d%H%M%S)
+            echo "ROOT_PATH=${ROOT_PATH}"
+            echo "RELEASES_PATH=${RELEASES_PATH}"
+            echo "SHARED_PATH=${SHARED_PATH}"
 
-            echo "📦 Criando estrutura em \${ROOT_PATH}..."
+            echo "📦 Criando estrutura em ${ROOT_PATH}..."
 
-            sudo mkdir -p \${RELEASES_PATH}
-            sudo mkdir -p \${SHARED_PATH}/storage/framework/cache
-            sudo mkdir -p \${SHARED_PATH}/storage/framework/sessions
-            sudo mkdir -p \${SHARED_PATH}/storage/framework/views
-            sudo mkdir -p \${SHARED_PATH}/storage/logs
-            sudo mkdir -p \${SHARED_PATH}/storage/app/public
+            sudo mkdir -p "${RELEASES_PATH}"
+            sudo mkdir -p "${SHARED_PATH}/storage/framework/cache"
+            sudo mkdir -p "${SHARED_PATH}/storage/framework/sessions"
+            sudo mkdir -p "${SHARED_PATH}/storage/framework/views"
+            sudo mkdir -p "${SHARED_PATH}/storage/logs"
+            sudo mkdir -p "${SHARED_PATH}/storage/app/public"
 
-            if [ ! -f "\${SHARED_PATH}/.env" ]; then
-              echo "❌ Arquivo shared/.env não encontrado em \${SHARED_PATH}"
+            # 🔐 Permissão inicial de escrita total no storage compartilhado do Host
+            sudo chmod -R 777 "${SHARED_PATH}/storage"
+            sudo chown -R ubuntu:www-data "${SHARED_PATH}/storage"
+
+            if [ ! -f "${SHARED_PATH}/.env" ]; then
+              echo "❌ Arquivo shared/.env não encontrado em ${SHARED_PATH}"
               exit 1
             fi
 
             echo "🔢 Calculando número sequencial da release..."
-            cd \${RELEASES_PATH}
-            
-            # Pega a última pasta criada no geral
-            LAST_DIR=\$(ls -d *-* 2>/dev/null | sort | tail -n 1)
-            
-            if [ -z "\${LAST_DIR}" ]; then
-              NEXT_SEQ="001"
-            else
-              LAST_SEQ=\$(echo \${LAST_DIR} | awk -F'-' '{print \$NF}')
-              # Remove zeros à esquerda para evitar erro de octal e soma 1
-              CLEAN_SEQ=\$(echo \${LAST_SEQ} | sed 's/^0*//')
-              if [ -z "\${CLEAN_SEQ}" ] || [ "\${CLEAN_SEQ}" = "" ]; then
-                CLEAN_SEQ=0
-              fi
-              NEXT_VAL=\$((CLEAN_SEQ + 1))
-              NEXT_SEQ=\$(printf "%03d" \${NEXT_VAL})
+            cd "${RELEASES_PATH}"
+
+            LAST_SEQ=$(
+                find . -maxdepth 1 -mindepth 1 -type d \
+                | sed 's#^\./##' \
+                | grep -E -- '-[0-9]{3}$' \
+                | awk -F'-' '{print $(NF)}' \
+                | sort -n \
+                | tail -1
+            )
+
+            if [ -z "${LAST_SEQ}" ]; then
+                LAST_SEQ="000"
             fi
 
-            RELEASE_NAME="\${DATE_PREFIX}-\${NEXT_SEQ}"
-            NEW_RELEASE="\${RELEASES_PATH}/\${RELEASE_NAME}"
+            echo "Última sequência encontrada: ${LAST_SEQ}"
 
-            echo "📦 Criando nova release: \${RELEASE_NAME}"
+            LAST_SEQ_NUMBER=$((10#${LAST_SEQ}))
+            NEXT_NUMBER=$((LAST_SEQ_NUMBER + 1))
+            NEXT_SEQ=$(printf "%03d" "${NEXT_NUMBER}")
 
-            sudo mkdir -p \${NEW_RELEASE}
-            sudo unzip -oq /tmp/blink-deploy-${ENV_LABEL}.zip -d \${NEW_RELEASE}
+            echo "Próxima sequência: ${NEXT_SEQ}"
 
-            echo "⚙️ Configurando o Docker Compose correto para o ambiente (${ENV_LABEL})..."
-            cd \${NEW_RELEASE}
+            DATE_PREFIX=$(date +%Y-%m-%d-%H-%M-%S)
+            RELEASE_NAME="${DATE_PREFIX}-${NEXT_SEQ}"
+            NEW_RELEASE="${RELEASES_PATH}/${RELEASE_NAME}"
+
+            echo "📦 Nova release será: ${RELEASE_NAME}"
+
+            sudo mkdir -p "${NEW_RELEASE}"
+            sudo unzip -oq /tmp/blink-deploy-${ENV_LABEL}.zip -d "${NEW_RELEASE}"
             
-            # Garante que o usuário ubuntu tem permissão de escrita temporária nesta pasta
-            sudo chown -R ubuntu:ubuntu \${NEW_RELEASE}
+            echo "⚙️ Configurando o Docker Compose correto para o ambiente (${ENV_LABEL})..."
+            cd "${NEW_RELEASE}"
+            sudo chown -R ubuntu:ubuntu "${NEW_RELEASE}"
 
             if [ "${ENV_LABEL}" = "prod" ]; then
-              if [ -f "docker-compose.prod.yml" ]; then
+              if [ -f docker-compose.prod.yml ]; then
                 cp docker-compose.prod.yml docker-compose.yml
-              elif [ -f "docker/docker-compose.prod.yml" ]; then
-                cp docker/docker-compose.prod.yml docker-compose.yml
-              elif [ -f "docker-compose.yml" ]; then
-                cp docker-compose.yml docker-compose.yml
-              else
-                echo "❌ AVISO: Nenhum docker-compose de produção foi encontrado!"
-                exit 1
               fi
             else
-              if [ -f "docker-compose.hom.yml" ]; then
+              if [ -f docker-compose.hom.yml ]; then
                 cp docker-compose.hom.yml docker-compose.yml
-              elif [ -f "docker/docker-compose.hom.yml" ]; then
-                cp docker/docker-compose.hom.yml docker-compose.yml
-              elif [ -f "docker-compose.yml" ]; then
-                cp docker-compose.yml docker-compose.yml
-              else
-                echo "❌ AVISO: Nenhum docker-compose de homologação foi encontrado!"
-                exit 1
               fi
             fi
 
             echo "📄 Arquivo docker-compose final gerado com sucesso:"
             ls -la docker-compose.yml
+            ls -la Dockerfile
 
-            echo "🛑 Parando containers antigos antes de subir a nova versão..."
-            if [ -d "\${CURRENT_LINK}/docker" ] && [ -f "\${CURRENT_LINK}/docker/docker-compose.yml" ]; then
-              cd \${CURRENT_LINK}/docker && docker compose --env-file \${SHARED_PATH}/.env down --remove-orphans || true
-            elif [ -f "\${CURRENT_LINK}/docker-compose.yml" ]; then
-              cd \${CURRENT_LINK} && docker compose --env-file \${SHARED_PATH}/.env down --remove-orphans || true
+            echo "🛑 Parando containers antigos..."
+
+            if [ -L "${ROOT_PATH}/current" ]; then
+                cd "${ROOT_PATH}/current"
+                docker compose \
+                  --env-file "${SHARED_PATH}/.env" \
+                  down --remove-orphans || true
             fi
 
-            echo "🐳 Subindo containers Docker na nova release..."
-            cd \${NEW_RELEASE}
-            if [ -f "docker-compose.yml" ]; then
-              docker compose --env-file \${SHARED_PATH}/.env up -d --build --remove-orphans
-            fi
+            docker rm -f \
+                blink-redis-${ENV_LABEL} \
+                blink-psql-${ENV_LABEL} \
+                blink-nginx-${ENV_LABEL} \
+                portapp-${ENV_LABEL} 2>/dev/null || true
 
             echo "🖼️ Sincronizando uploads..."
-            if [ -d "\${NEW_RELEASE}/storage/app/public" ]; then
-              sudo cp -R \${NEW_RELEASE}/storage/app/public/. \${SHARED_PATH}/storage/app/public/ || true
+
+            if [ -d "${NEW_RELEASE}/storage/app/public" ]; then
+                sudo cp -R "${NEW_RELEASE}/storage/app/public/." \
+                "${SHARED_PATH}/storage/app/public/" || true
             fi
 
-            echo "🔗 Criando links simbólicos..."
-            sudo ln -sfn \${SHARED_PATH}/.env \${NEW_RELEASE}/.env
+            echo "🔗 Configurando storage e arquivos compartilhados..."
 
-            sudo rm -rf \${NEW_RELEASE}/storage
-            sudo ln -sfn \${SHARED_PATH}/storage \${NEW_RELEASE}/storage
+            # Substitui a pasta storage local pelo link da pasta shared
+            sudo rm -rf "${NEW_RELEASE}/storage"
+            sudo ln -sfn "${SHARED_PATH}/storage" "${NEW_RELEASE}/storage"
 
-            sudo rm -rf \${NEW_RELEASE}/public/storage
-            sudo ln -sfn \${SHARED_PATH}/storage/app/public \${NEW_RELEASE}/public/storage
+            # 🔐 Reforça 777 na pasta de storage compartilhada antes de criar os links
+            sudo chmod -R 777 "${SHARED_PATH}/storage"
+            sudo chown -R ubuntu:www-data "${SHARED_PATH}/storage"
 
-            echo "🔐 Ajustando permissões..."
-            sudo chown -R ubuntu:www-data \${ROOT_PATH}
-            sudo chmod -R 775 \${SHARED_PATH}/storage
-            sudo chmod -R 775 \${NEW_RELEASE}/bootstrap/cache
+            sudo ln -sfn \
+            "${SHARED_PATH}/.env" \
+            "${NEW_RELEASE}/.env"
 
-            cd \${NEW_RELEASE}
+            sudo rm -rf "${NEW_RELEASE}/public/storage"
 
-            echo "🧹 Limpando caches..."
-            php artisan config:clear || true
-            php artisan route:clear || true
-            php artisan view:clear || true
-            php artisan cache:clear || true
+            sudo ln -sfn \
+            "${SHARED_PATH}/storage/app/public" \
+            "${NEW_RELEASE}/public/storage"
 
-            echo "🗄️ Executando migrations..."
-            php artisan migrate --force
-            php artisan db:seed --force
-            
+            echo "🔐 Ajustando permissões finais no host..."
+
+            sudo chown -R ubuntu:www-data "${NEW_RELEASE}"
+            if [ -d "${NEW_RELEASE}/bootstrap/cache" ]; then
+                # 🔐 Alterado de 775 para 777 para o PHP/Nginx do container conseguir gravar o cache de rotas e views sem travar
+                sudo chmod -R 777 "${NEW_RELEASE}/bootstrap/cache"
+            fi
+
+            echo "=========================================="
+            echo "🔀 REALIZANDO SWAP ATÔMICO"
+            echo "ROOT_PATH=${ROOT_PATH}"
+            echo "NEW_RELEASE=${NEW_RELEASE}"
+
+            echo "Current antes:"
+            readlink -f "${ROOT_PATH}/current" || true
+
+            sudo ln -sfn \
+            "${NEW_RELEASE}" \
+            "${ROOT_PATH}/current"
+
+            echo "Current depois:"
+            readlink -f "${ROOT_PATH}/current"
+
+            echo "=========================================="
+
+            echo "🐳 Subindo containers Docker pela release atual..."
+
+            cd "${ROOT_PATH}/current"
+
+            if [ -f docker-compose.yml ]; then
+              # Garante que as redes externas existam antes de subir os containers
+              sudo docker network create blink-net-${ENV_LABEL} 2>/dev/null || true
+              sudo docker volume create blink-pgsql-data-${ENV_LABEL} 2>/dev/null || true
+              sudo docker volume create blink-redis-data-${ENV_LABEL} 2>/dev/null || true
+
+              docker compose \
+              --env-file "${SHARED_PATH}/.env" \
+              up -d --build --remove-orphans
+            else
+                echo "❌ Erro: docker-compose.yml não encontrado em current!"
+                exit 1
+            fi
+
+            echo "🛠️ Ajustando permissões internas dos containers (Prevenção tempnam)..."
+
+            docker compose \
+            --env-file "${SHARED_PATH}/.env" \
+            exec -T app chmod 777 /tmp || true
+
+            docker compose \
+            --env-file "${SHARED_PATH}/.env" \
+            exec -T app chown -R www-data:www-data storage bootstrap/cache || true
+
+            # 🔐 Alterado de 775 para 777 para que a permissão interna do container não conflite com os volumes do host
+            docker compose \
+            --env-file "${SHARED_PATH}/.env" \
+            exec -T app chmod -R 777 storage bootstrap/cache || true
+
+            echo "🗄️ Executando migrations de forma segura..."
+
+            docker compose \
+            --env-file "${SHARED_PATH}/.env" \
+            exec -T app php artisan migrate --force || true
+
+            docker compose \
+            --env-file "${SHARED_PATH}/.env" \
+            exec -T app php artisan db:seed --force || true
+
             echo "⚡ Gerando caches..."
-            php artisan config:cache
-            php artisan route:cache
-            php artisan view:cache
 
-            echo "🔀 Realizando swap atômico..."
-            sudo ln -sfn \${NEW_RELEASE} \${CURRENT_LINK}
+            # 🧹 Limpa resíduos de compilações anteriores antes de recriar os caches do Laravel
+            docker compose \
+            --env-file "${SHARED_PATH}/.env" \
+            exec -T app php artisan optimize:clear || true
 
-            echo "🧹 Removendo releases antigas..."
-            cd \${RELEASES_PATH}
-            ls -t | tail -n +4 | xargs -r sudo rm -rf --
+            docker compose \
+            --env-file "${SHARED_PATH}/.env" \
+            exec -T app php artisan config:cache || true
 
-            sudo rm -f /tmp/blink-deploy-${ENV_LABEL}.zip
+            docker compose \
+            --env-file "${SHARED_PATH}/.env" \
+            exec -T app php artisan route:cache || true
 
-            echo "✅ Deploy concluído com sucesso em \${ROOT_PATH}!"
+            docker compose \
+            --env-file "${SHARED_PATH}/.env" \
+            exec -T app php artisan view:cache || true
+
+            echo "🧹 Limpando releases antigas (mantendo as 5 mais recentes)..."
+
+            cd "${RELEASES_PATH}"
+            CURRENT_ACTIVE_PATH=$(readlink -f "${ROOT_PATH}/current" || true)
+
+            # Ordena por data de modificação real (da mais recente para a mais antiga) e pega da 6ª em diante
+            ls -1dt */ 2>/dev/null | tail -n +6 | while read -r dir; do
+              dir_clean="${dir%/}"
+              FULL_DIR_PATH="${RELEASES_PATH}/${dir_clean}"
+
+              # Trava de segurança: remove apenas se não for a release ativa atual
+              if [ -n "${dir_clean}" ] && [ "${FULL_DIR_PATH}" != "${CURRENT_ACTIVE_PATH}" ]; then
+                echo "🗑️ Removendo release antiga: ${dir_clean}"
+                sudo rm -rf "${FULL_DIR_PATH}"
+              else
+                echo "🛡️ Mantendo release em uso: ${dir_clean}"
+              fi
+            done
           EOF
