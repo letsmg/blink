@@ -82,7 +82,7 @@ services:
     volumes:
       - redis-data:/data
     ports:
-      - "${REDIS_PORT_EXTERNAL:-6400}:6379"
+      - "${REDIS_PORT_EXTERNAL:-6381}:6379"
     networks:
       - blink-net
     healthcheck:
