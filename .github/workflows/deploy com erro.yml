@@ -1,4 +1,4 @@
-name: 🚀 Deploy resumido
+name: 🚀 Deploy resumido Blink
 
 on:
   push:
@@ -199,7 +199,7 @@ jobs:
             docker compose --env-file "${SHARED_PATH}/.env" exec -T app php artisan route:cache
             docker compose --env-file "${SHARED_PATH}/.env" exec -T app php artisan view:cache
                         echo "=========================================="
-                        
+
             echo "🔀 REALIZANDO SWAP ATÔMICO"
 
             # Proteção contra pasta 'current' física/corrompida
