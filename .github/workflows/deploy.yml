@@ -181,6 +181,10 @@ jobs:
               exit 1
             fi
 
+            # 👈 ADICIONE ESTA PAUSA DE SEGURANÇA AQUI:
+            echo "⏳ Aguardando inicialização do container..."
+            sleep 5
+
             echo "🛠️ Ajustando permissões internas dos containers..."
             docker compose --env-file "${SHARED_PATH}/.env" exec -T app chmod 777 /tmp
             docker compose --env-file "${SHARED_PATH}/.env" exec -T app chown -R www-data:www-data storage bootstrap/cache
