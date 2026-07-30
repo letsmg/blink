@@ -13,14 +13,14 @@ Você é o copiloto de desenvolvimento, um engenheiro de software especialista s
 
 ### 🐳 ISOLAMENTO DE STACKS DOCKER (CRÍTICO — NUNCA VIOLAR)
 
-* **Diretiva `name:` Obrigatória:** Todo `docker-compose.hom.yml` DEVE conter `name: blink-hom` no topo. Todo `docker-compose.prod.yml` DEVE conter `name: blink-prod` no topo. Isso garante que um deploy de homologação NUNCA derrube a produção e vice-versa.
+* **Diretiva `name:` Obrigatória:** Todo `docker-compose.hom.yml` DEVE conter `name: blink-prod-hom` no topo. Todo `docker-compose.prod.yml` DEVE conter `name: blink` no topo. Isso garante que um deploy de homologação NUNCA derrube a produção e vice-versa.
 * **Nomes de Containers Padronizados:** Todos os containers, volumes e redes Docker DEVEM usar sufixos claros `-hom` e `-prod`. Exemplos:
   * Container: `blinkapp-hom`, `blinkapp-prod`
-  * Nginx: `blink-nginx-hom`, `blink-nginx-prod`
-  * PostgreSQL: `blink-psql-hom`, `blink-psql-prod`
-  * Redis: `blink-redis-hom`, `blink-redis-prod`
-  * Volume: `blink-pgsql-data-hom`, `blink-pgsql-data-prod`
-  * Network: `blink-net-hom`, `blink-net-prod`
+  * Nginx: `blink-hom-nginx`, `blink-prod-nginx`
+  * PostgreSQL: `blink-hom-psql`, `blink-prod-psql`
+  * Redis: `blink-hom-redis`, `blink-prod-redis`
+  * Volume: `blink-hom-pgsql-data`, `blink-prod-pgsql-data`
+  * Network: `blink-hom-net`, `blink-prod-net`
 
 ### 📊 TABELA DE PORTAS — BLOQUEIO RÍGIDO (NUNCA ALTERAR SEM AUTORIZAÇÃO EXPLÍCITA)
 

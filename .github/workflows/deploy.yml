@@ -169,9 +169,9 @@ jobs:
             cd "${NEW_RELEASE}"
 
             if [ -f docker-compose.yml ]; then
-              sudo docker network create blink-net-${ENV_LABEL} 2>/dev/null || true
-              sudo docker volume create blink-pgsql-data-${ENV_LABEL} 2>/dev/null || true
-              sudo docker volume create blink-redis-data-${ENV_LABEL} 2>/dev/null || true
+              sudo docker network create blink-${ENV_LABEL}-net 2>/dev/null || true
+              sudo docker volume create blink-${ENV_LABEL}-pgsql-data 2>/dev/null || true
+              sudo docker volume create blink-${ENV_LABEL}-redis-data 2>/dev/null || true
 
               docker compose \
                 --env-file "${SHARED_PATH}/.env" \
