@@ -75,7 +75,6 @@ jobs:
             CURRENT_LINK="${ROOT_PATH}/current"
 
             echo "📦 Criando estrutura em ${ROOT_PATH}..."
-
             sudo mkdir -p "${RELEASES_PATH}"
             sudo mkdir -p "${SHARED_PATH}/storage/framework/cache"
             sudo mkdir -p "${SHARED_PATH}/storage/framework/sessions"
@@ -119,32 +118,31 @@ jobs:
 
             sudo mkdir -p "${NEW_RELEASE}"
             sudo unzip -oq /tmp/blink-deploy-${ENV_LABEL}.zip -d "${NEW_RELEASE}"
-            
-            echo "⚙️ Configurando o Docker Compose correto (${ENV_LABEL})..."
-            cd "${NEW_RELEASE}"
             sudo chown -R ubuntu:ubuntu "${NEW_RELEASE}"
 
-            if [ "${ENV_LABEL}" = "prod" ]; then
-              if [ -f docker-compose.prod.yml ]; then
-                cp docker-compose.prod.yml docker-compose.yml
-              fi
+            cd "${NEW_RELEASE}"
+
+            echo "⚙️ Copiando docker-compose.${ENV_LABEL}.yml para docker-compose.yml..."
+            if [ -f "docker-compose.${ENV_LABEL}.yml" ]; then
+              cp "docker-compose.${ENV_LABEL}.yml" docker-compose.yml
             else
-              if [ -f docker-compose.hom.yml ]; then
-                cp docker-compose.hom.yml docker-compose.yml
-              fi
+              echo "❌ Erro: docker-compose.${ENV_LABEL}.yml não encontrado!"
+              exit 1
             fi
 
-            echo "🛑 Parando containers antigos..."
+            echo "🛑 Parando e limpando containers antigos..."
             if [ -e "${CURRENT_LINK}" ]; then
                 cd "${CURRENT_LINK}"
                 docker compose --env-file "${SHARED_PATH}/.env" down --remove-orphans || true
             fi
 
+            # Remove containers antigos do padrão antigo (blinkapp) e novo (blink-hom-app / blink-prod-app)
             docker rm -f \
-                blink-${ENV_LABEL}-redis \
-                blink-${ENV_LABEL}-psql \
+                blinkapp-${ENV_LABEL} \
+                blink-${ENV_LABEL}-app \
                 blink-${ENV_LABEL}-nginx \
-                blink-${ENV_LABEL}-app 2>/dev/null || true
+                blink-${ENV_LABEL}-psql \
+                blink-${ENV_LABEL}-redis 2>/dev/null || true
 
             echo "🖼️ Sincronizando uploads e links da nova release..."
             if [ -d "${NEW_RELEASE}/storage/app/public" ]; then
@@ -168,22 +166,16 @@ jobs:
             echo "🐳 Subindo containers Docker na NEW_RELEASE..."
             cd "${NEW_RELEASE}"
 
-            if [ -f docker-compose.yml ]; then
-              sudo docker network create blink-${ENV_LABEL}-net 2>/dev/null || true
-              sudo docker volume create blink-${ENV_LABEL}-pgsql-data 2>/dev/null || true
-              sudo docker volume create blink-${ENV_LABEL}-redis-data 2>/dev/null || true
+            sudo docker network create blink-${ENV_LABEL}-net 2>/dev/null || true
+            sudo docker volume create blink-${ENV_LABEL}-pgsql-data 2>/dev/null || true
+            sudo docker volume create blink-${ENV_LABEL}-redis-data 2>/dev/null || true
 
-              docker compose \
-                --env-file "${SHARED_PATH}/.env" \
-                up -d --build --remove-orphans
-            else
-              echo "❌ Erro: docker-compose.yml não encontrado!"
-              exit 1
-            fi
+            docker compose \
+              --env-file "${SHARED_PATH}/.env" \
+              up -d --build --remove-orphans
 
-            # 👈 ADICIONE ESTA PAUSA DE SEGURANÇA AQUI:
-            echo "⏳ Aguardando inicialização do container..."
-            sleep 5
+            echo "⏳ Aguardando inicialização completa do container e do entrypoint..."
+            sleep 8
 
             echo "🛠️ Ajustando permissões internas dos containers (como root)..."
             docker compose --env-file "${SHARED_PATH}/.env" exec -u root -T app chmod 777 /tmp
@@ -198,11 +190,10 @@ jobs:
             docker compose --env-file "${SHARED_PATH}/.env" exec -T app php artisan config:cache
             docker compose --env-file "${SHARED_PATH}/.env" exec -T app php artisan route:cache
             docker compose --env-file "${SHARED_PATH}/.env" exec -T app php artisan view:cache
-                        echo "=========================================="
 
+            echo "=========================================="
             echo "🔀 REALIZANDO SWAP ATÔMICO"
 
-            # Proteção contra pasta 'current' física/corrompida
             if [ -d "${CURRENT_LINK}" ] && [ ! -L "${CURRENT_LINK}" ]; then
               echo "⚠️ Removendo diretório 'current' físico antigo..."
               sudo rm -rf "${CURRENT_LINK}"
