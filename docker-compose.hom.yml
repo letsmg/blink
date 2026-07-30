@@ -20,12 +20,12 @@ services:
     environment:
       - APP_ENV=staging
       - APP_DEBUG=true
-      - DB_HOST=blink-psql-hom
+      - DB_HOST=blink-hom-psql
       - DB_PORT=5432 # Dentro da rede do Docker a porta do Postgres é 5432 (5451 é apenas no Host)
       - DB_DATABASE=${DB_DATABASE:-blink_db}
       - DB_USERNAME=${DB_USERNAME:-blink_user}
       - DB_PASSWORD=${DB_PASSWORD}
-      - REDIS_HOST=blink-redis-hom
+      - REDIS_HOST=blink-hom-redis
       - REDIS_PORT=6379 # Dentro da rede do Docker a porta do Redis é 6379 (6382 é apenas no Host)
       - SESSION_DRIVER=${SESSION_DRIVER:-database}
       - CACHE_STORE=${CACHE_STORE:-file}
@@ -42,7 +42,7 @@ services:
 
   nginx:
     image: nginx:alpine
-    container_name: blink-nginx-hom
+    container_name: blink-hom-nginx
     restart: unless-stopped
     ports:
       - "${APP_PORT:-8010}:80"
@@ -60,7 +60,7 @@ services:
 
   pgsql:
     image: postgres:16-alpine
-    container_name: blink-psql-hom
+    container_name: blink-hom-psql
     restart: unless-stopped
     environment:
       POSTGRES_USER: ${DB_USERNAME:-blink_user}
@@ -80,7 +80,7 @@ services:
 
   redis:
     image: redis:7-alpine
-    container_name: blink-redis-hom
+    container_name: blink-hom-redis
     restart: unless-stopped
     command: >
       redis-server
@@ -101,13 +101,13 @@ services:
 
 volumes:
   pgsql-data:
-    name: blink-pgsql-data-hom
+    name: blink-hom-pgsql-data
     external: true
   redis-data:
-    name: blink-redis-data-hom
+    name: blink-hom-redis-data
     external: true
 
 networks:
   blink-net:    
-    name: blink-net-hom
+    name: blink-hom-net
     external: true
