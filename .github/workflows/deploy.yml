@@ -118,7 +118,7 @@ jobs:
             sudo chown -R ubuntu:www-data "${NEW_RELEASE}" "${SHARED_PATH}/storage"
             sudo chmod -R 777 "${SHARED_PATH}/storage" "${NEW_RELEASE}/bootstrap/cache" 2>/dev/null || true
 
-            # 6. Docker Build & Up diretamente na pasta da NOVA RELEASE
+            # 6. Docker Build & Up
             cd "${NEW_RELEASE}"
             sudo docker network create blink-${ENV_LABEL}-net 2>/dev/null || true
             sudo docker volume create blink-${ENV_LABEL}-pgsql-data 2>/dev/null || true
@@ -126,7 +126,15 @@ jobs:
 
             docker compose --env-file "${SHARED_PATH}/.env" up -d --build --remove-orphans
 
+            # Espera 5 segundos para garantir que o PHP-FPM / Entrypoint inicializou
+            echo "⏳ Aguardando inicialização dos containers..."
+            sleep 5
+
+            # Verifica se os containers estão rodando
+            docker compose ps
+
             # 7. Execução dos comandos Artisan na nova release
+            echo "⚙️ Executando comandos Artisan..."
             docker compose --env-file "${SHARED_PATH}/.env" exec -T app chmod 777 /tmp || true
             docker compose --env-file "${SHARED_PATH}/.env" exec -T app chown -R www-data:www-data storage bootstrap/cache || true
             docker compose --env-file "${SHARED_PATH}/.env" exec -T app chmod -R 777 storage bootstrap/cache || true
@@ -136,7 +144,7 @@ jobs:
             docker compose --env-file "${SHARED_PATH}/.env" exec -T app php artisan optimize:clear || true
             docker compose --env-file "${SHARED_PATH}/.env" exec -T app php artisan optimize || true
 
-            # 8. SWAP ATÔMICO (Só é executado se tudo acima deu 100% certo)
+            # 8. SWAP ATÔMICO
             echo "🔀 Trocando ponteiro da versão atual (Swap Atômico)..."
             sudo ln -sfn "${NEW_RELEASE}" "${ROOT_PATH}/current"
 
