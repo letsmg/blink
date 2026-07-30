@@ -18,9 +18,7 @@ jobs:
           extensions: mbstring, bcmath, gd, zip, pgsql
 
       - name: 📦 Install Composer
-        uses: composer/github-action@v2
-        with:
-          command: install --no-dev --optimize-autoloader --no-interaction
+        run: composer install --no-dev --optimize-autoloader --no-interaction
 
       - name: 🟢 Setup Node.js
         uses: actions/setup-node@v4
