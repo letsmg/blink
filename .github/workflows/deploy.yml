@@ -170,7 +170,7 @@ jobs:
             sudo docker volume create blink-${ENV_LABEL}-pgsql-data 2>/dev/null || true
             sudo docker volume create blink-${ENV_LABEL}-redis-data 2>/dev/null || true
 
-            docker compose \
+            sudo docker compose \
               -f "${NEW_RELEASE}/docker-compose.yml" \
               --env-file "${SHARED_PATH}/.env" \
               up -d --build --remove-orphans
@@ -179,18 +179,18 @@ jobs:
             sleep 8
 
             echo "🛠️ Ajustando permissões internas dos containers (como root)..."
-            docker compose -f "${NEW_RELEASE}/docker-compose.yml" --env-file "${SHARED_PATH}/.env" exec -u root -T app chmod 777 /tmp
-            docker compose -f "${NEW_RELEASE}/docker-compose.yml" --env-file "${SHARED_PATH}/.env" exec -u root -T app chown -R www-data:www-data /var/www/storage /var/www/bootstrap/cache
-            docker compose -f "${NEW_RELEASE}/docker-compose.yml" --env-file "${SHARED_PATH}/.env" exec -u root -T app chmod -R 775 /var/www/storage /var/www/bootstrap/cache
+            sudo docker compose -f "${NEW_RELEASE}/docker-compose.yml" --env-file "${SHARED_PATH}/.env" exec -u root -T app chmod 777 /tmp
+            sudo docker compose -f "${NEW_RELEASE}/docker-compose.yml" --env-file "${SHARED_PATH}/.env" exec -u root -T app chown -R www-data:www-data /var/www/storage /var/www/bootstrap/cache
+            sudo docker compose -f "${NEW_RELEASE}/docker-compose.yml" --env-file "${SHARED_PATH}/.env" exec -u root -T app chmod -R 775 /var/www/storage /var/www/bootstrap/cache
 
             echo "🗄️ Executando migrations e seeds..."
-            docker compose -f "${NEW_RELEASE}/docker-compose.yml" --env-file "${SHARED_PATH}/.env" exec -T app php artisan migrate --force
-            docker compose -f "${NEW_RELEASE}/docker-compose.yml" --env-file "${SHARED_PATH}/.env" exec -T app php artisan db:seed --force
+            sudo docker compose -f "${NEW_RELEASE}/docker-compose.yml" --env-file "${SHARED_PATH}/.env" exec -T app php artisan migrate --force
+            sudo docker compose -f "${NEW_RELEASE}/docker-compose.yml" --env-file "${SHARED_PATH}/.env" exec -T app php artisan db:seed --force
 
             echo "⚡ Gerando caches do Laravel..."
-            docker compose -f "${NEW_RELEASE}/docker-compose.yml" --env-file "${SHARED_PATH}/.env" exec -T app php artisan config:cache
-            docker compose -f "${NEW_RELEASE}/docker-compose.yml" --env-file "${SHARED_PATH}/.env" exec -T app php artisan route:cache
-            docker compose -f "${NEW_RELEASE}/docker-compose.yml" --env-file "${SHARED_PATH}/.env" exec -T app php artisan view:cache
+            sudo docker compose -f "${NEW_RELEASE}/docker-compose.yml" --env-file "${SHARED_PATH}/.env" exec -T app php artisan config:cache
+            sudo docker compose -f "${NEW_RELEASE}/docker-compose.yml" --env-file "${SHARED_PATH}/.env" exec -T app php artisan route:cache
+            sudo docker compose -f "${NEW_RELEASE}/docker-compose.yml" --env-file "${SHARED_PATH}/.env" exec -T app php artisan view:cache
 
             echo "=========================================="
             echo "🔀 REALIZANDO SWAP ATÔMICO"
