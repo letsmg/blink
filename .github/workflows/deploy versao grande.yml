@@ -1,4 +1,4 @@
-name: 🚀 Build & Deploy Blink (Atômico & Ambientes)
+name: Deploy grande
 
 on:
   push:
