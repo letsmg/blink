@@ -73,8 +73,9 @@ jobs:
             RELEASES_PATH="${ROOT_PATH}/releases"
             SHARED_PATH="${ROOT_PATH}/shared"
             CURRENT_LINK="${ROOT_PATH}/current"
+            APP_CONTAINER="blink-${ENV_LABEL}-app"
 
-            echo "📦 Criando estrutura em ${ROOT_PATH}..."
+            echo "📦 1. Garantindo estrutura base..."
             sudo mkdir -p "${RELEASES_PATH}"
             sudo mkdir -p "${SHARED_PATH}/storage/framework/cache"
             sudo mkdir -p "${SHARED_PATH}/storage/framework/sessions"
@@ -86,11 +87,11 @@ jobs:
             sudo chown -R ubuntu:www-data "${SHARED_PATH}/storage"
 
             if [ ! -f "${SHARED_PATH}/.env" ]; then
-              echo "❌ Arquivo shared/.env não encontrado em ${SHARED_PATH}"
+              echo "❌ Erro: Arquivo ${SHARED_PATH}/.env não existe. Crie o arquivo .env no servidor em ${SHARED_PATH}."
               exit 1
             fi
 
-            echo "🔢 Calculando número sequencial da release..."
+            echo "🔢 2. Calculando número sequencial da release..."
             cd "${RELEASES_PATH}"
 
             LAST_SEQ=$(
@@ -114,7 +115,7 @@ jobs:
             RELEASE_NAME="${DATE_PREFIX}-${NEXT_SEQ}"
             NEW_RELEASE="${RELEASES_PATH}/${RELEASE_NAME}"
 
-            echo "📦 Nova release será: ${RELEASE_NAME}"
+            echo "📦 Nova release criada em: ${RELEASE_NAME}"
 
             sudo mkdir -p "${NEW_RELEASE}"
             sudo unzip -oq /tmp/blink-deploy-${ENV_LABEL}.zip -d "${NEW_RELEASE}"
@@ -122,7 +123,6 @@ jobs:
 
             cd "${NEW_RELEASE}"
 
-            echo "⚙️ Copiando docker-compose.${ENV_LABEL}.yml para docker-compose.yml..."
             if [ -f "docker-compose.${ENV_LABEL}.yml" ]; then
               cp "docker-compose.${ENV_LABEL}.yml" docker-compose.yml
             else
@@ -130,7 +130,7 @@ jobs:
               exit 1
             fi
 
-            echo "🛑 Parando e limpando containers antigos..."
+            echo "🛑 3. Encerrando containers da versão anterior..."
             if [ -e "${CURRENT_LINK}" ]; then
                 cd "${CURRENT_LINK}"
                 sudo docker compose --env-file "${SHARED_PATH}/.env" down --remove-orphans || true
@@ -143,17 +143,15 @@ jobs:
                 blink-${ENV_LABEL}-psql \
                 blink-${ENV_LABEL}-redis 2>/dev/null || true
 
-            echo "🖼️ Sincronizando uploads e links da nova release..."
+            echo "🖼️ 4. Vinculando pastas compartilhadas e permissões..."
             if [ -d "${NEW_RELEASE}/storage/app/public" ]; then
                 sudo cp -R "${NEW_RELEASE}/storage/app/public/." "${SHARED_PATH}/storage/app/public/" || true
             fi
 
             sudo rm -rf "${NEW_RELEASE}/storage"
             sudo ln -sfn "${SHARED_PATH}/storage" "${NEW_RELEASE}/storage"
-            sudo chmod -R 777 "${SHARED_PATH}/storage"
-            sudo chown -R ubuntu:www-data "${SHARED_PATH}/storage"
-
             sudo ln -sfn "${SHARED_PATH}/.env" "${NEW_RELEASE}/.env"
+
             sudo rm -rf "${NEW_RELEASE}/public/storage"
             sudo ln -sfn "${SHARED_PATH}/storage/app/public" "${NEW_RELEASE}/public/storage"
 
@@ -161,8 +159,9 @@ jobs:
             if [ -d "${NEW_RELEASE}/bootstrap/cache" ]; then
                 sudo chmod -R 777 "${NEW_RELEASE}/bootstrap/cache"
             fi
+            sudo chmod -R 777 "${SHARED_PATH}/storage"
 
-            echo "🐳 Subindo containers Docker na NEW_RELEASE..."
+            echo "🐳 5. Subindo containers Docker..."
             cd "${NEW_RELEASE}"
 
             sudo docker network create blink-${ENV_LABEL}-net 2>/dev/null || true
@@ -174,27 +173,32 @@ jobs:
               --env-file "${SHARED_PATH}/.env" \
               up -d --build --remove-orphans
 
-            echo "⏳ Aguardando inicialização completa do container..."
-            sleep 8
+            echo "⏳ 6. Aguardando container ${APP_CONTAINER} ficar ativo..."
+            for i in {1..15}; do
+              if sudo docker ps --format '{{.Names}}' | grep -q "^${APP_CONTAINER}$"; then
+                echo "✅ Container ${APP_CONTAINER} detectado!"
+                break
+              fi
+              sleep 2
+            done
 
-            APP_CONTAINER="blink-${ENV_LABEL}-app"
+            sleep 5
 
-            echo "🛠️ Ajustando permissões internas dos containers (como root)..."
-            sudo docker exec -u root -i "${APP_CONTAINER}" chmod 777 /tmp
-            sudo docker exec -u root -i "${APP_CONTAINER}" chown -R www-data:www-data /var/www/storage /var/www/bootstrap/cache
-            sudo docker exec -u root -i "${APP_CONTAINER}" chmod -R 775 /var/www/storage /var/www/bootstrap/cache
+            echo "🛠️ 7. Executando rotinas internas do Laravel..."
+            sudo docker exec -u root -i "${APP_CONTAINER}" chmod 777 /tmp || true
+            sudo docker exec -u root -i "${APP_CONTAINER}" chmod -R 777 /var/www/bootstrap/cache || true
 
             echo "🗄️ Executando migrations e seeds..."
             sudo docker exec -i "${APP_CONTAINER}" php artisan migrate --force
-            sudo docker exec -i "${APP_CONTAINER}" php artisan db:seed --force
+            sudo docker exec -i "${APP_CONTAINER}" php artisan db:seed --force || true
 
-            echo "⚡ Gerando caches do Laravel..."
+            echo "⚡ Gerando otimizações de cache..."
             sudo docker exec -i "${APP_CONTAINER}" php artisan config:cache
             sudo docker exec -i "${APP_CONTAINER}" php artisan route:cache
             sudo docker exec -i "${APP_CONTAINER}" php artisan view:cache
 
             echo "=========================================="
-            echo "🔀 REALIZANDO SWAP ATÔMICO"
+            echo "🔀 8. REALIZANDO SWAP ATÔMICO DA RELEASE"
 
             if [ -d "${CURRENT_LINK}" ] && [ ! -L "${CURRENT_LINK}" ]; then
               echo "⚠️ Removendo diretório 'current' físico antigo..."
@@ -206,7 +210,7 @@ jobs:
             echo "Release ativa atualizada para: $(readlink -f "${CURRENT_LINK}")"
             echo "=========================================="
 
-            echo "🧹 Limpando releases antigas (mantendo as 5 mais recentes)..."
+            echo "🧹 9. Limpando versões antigas (mantendo as 5 recentes)..."
             cd "${RELEASES_PATH}"
             CURRENT_ACTIVE_PATH=$(readlink -f "${CURRENT_LINK}" || true)
 
@@ -221,5 +225,5 @@ jobs:
             done
 
             sudo rm -f /tmp/blink-deploy-${ENV_LABEL}.zip
-            echo "✅ Deploy concluído com sucesso!"
+            echo "🎉 DEPLOY CONCLUÍDO COM SUCESSO E TOTALMENTE AUTOMATIZADO!"
           EOF
