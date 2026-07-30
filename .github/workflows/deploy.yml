@@ -11,12 +11,30 @@ jobs:
       - name: 📥 Checkout code
         uses: actions/checkout@v4
 
-      - name: 🐘 Setup PHP
+# 1. Executa no GitHub Actions (Nuvem)
+      - name: 🐘 Setup PHP (GitHub Nuvem)
+        if: env.ACT != 'true'
         uses: shivammathur/setup-php@v2
         with:
           php-version: '8.4'
           extensions: mbstring, bcmath, gd, zip, pgsql
 
+      # 2. Executa apenas no ACT (Seu PC Local) - Instala PHP 8.4 direto no Ubuntu
+      - name: 🐘 Setup PHP 8.4 & Composer (ACT Local)
+        if: env.ACT == 'true'
+        run: |
+          apt-get update -qq
+          apt-get install -y software-properties-common curl zip unzip git
+          add-apt-repository -y ppa:ondrej/php
+          apt-get update -qq
+          apt-get install -y php8.4-cli php8.4-xml php8.4-mbstring php8.4-bcmath php8.4-gd php8.4-zip php8.4-pgsql
+          update-alternatives --set php /usr/bin/php8.4
+          
+          if ! command -v composer &> /dev/null; then
+            curl -sS https://getcomposer.org/installer | php -- --install-dir=/usr/local/bin --filename=composer
+          fi
+
+      # 3. Executa o install normalmente em ambos os ambientes
       - name: 📦 Install Composer
         run: composer install --no-dev --optimize-autoloader --no-interaction
 
@@ -43,12 +61,14 @@ jobs:
             -x "storage/logs/*"
 
       - name: 🔑 Configure SSH
+        if: env.ACT != 'true'
         uses: shimataro/ssh-key-action@v2
         with:
           key: ${{ secrets.SSH_PRIVATE_KEY }}
           known_hosts: ${{ secrets.SSH_KNOWN_HOSTS }}
 
       - name: 🚀 Deploy Atômico com Versões Sequenciais
+        if: env.ACT != 'true'
         run: |
           SERVER_IP="${{ secrets.SERVER_IP }}"
           BRANCH_NAME="${{ github.ref_name }}"
@@ -71,6 +91,7 @@ jobs:
             ROOT_PATH="${TARGET_ROOT}"
             RELEASES_PATH="${ROOT_PATH}/releases"
             SHARED_PATH="${ROOT_PATH}/shared"
+            PROJECT_NAME="blink-${ENV_LABEL}"
 
             # 1. Validação inicial e estrutura compartilhada
             if [ ! -f "${SHARED_PATH}/.env" ]; then
@@ -124,25 +145,24 @@ jobs:
             sudo docker volume create blink-${ENV_LABEL}-pgsql-data 2>/dev/null || true
             sudo docker volume create blink-${ENV_LABEL}-redis-data 2>/dev/null || true
 
-            docker compose --env-file "${SHARED_PATH}/.env" up -d --build --remove-orphans
+            # Nome do projeto (-p) garante que ele reutilliza/atualiza os containers existentes sem dar erro de porta
+            docker compose -p "${PROJECT_NAME}" --env-file "${SHARED_PATH}/.env" up -d --build --remove-orphans
 
-            # Espera 5 segundos para garantir que o PHP-FPM / Entrypoint inicializou
             echo "⏳ Aguardando inicialização dos containers..."
             sleep 5
 
-            # Verifica se os containers estão rodando
-            docker compose ps
+            docker compose -p "${PROJECT_NAME}" ps
 
             # 7. Execução dos comandos Artisan na nova release
             echo "⚙️ Executando comandos Artisan..."
-            docker compose --env-file "${SHARED_PATH}/.env" exec -T app chmod 777 /tmp || true
-            docker compose --env-file "${SHARED_PATH}/.env" exec -T app chown -R www-data:www-data storage bootstrap/cache || true
-            docker compose --env-file "${SHARED_PATH}/.env" exec -T app chmod -R 777 storage bootstrap/cache || true
+            docker compose -p "${PROJECT_NAME}" --env-file "${SHARED_PATH}/.env" exec -T app chmod 777 /tmp || true
+            docker compose -p "${PROJECT_NAME}" --env-file "${SHARED_PATH}/.env" exec -T app chown -R www-data:www-data storage bootstrap/cache || true
+            docker compose -p "${PROJECT_NAME}" --env-file "${SHARED_PATH}/.env" exec -T app chmod -R 777 storage bootstrap/cache || true
 
-            docker compose --env-file "${SHARED_PATH}/.env" exec -T app php artisan migrate --force
-            docker compose --env-file "${SHARED_PATH}/.env" exec -T app php artisan db:seed --force || true
-            docker compose --env-file "${SHARED_PATH}/.env" exec -T app php artisan optimize:clear || true
-            docker compose --env-file "${SHARED_PATH}/.env" exec -T app php artisan optimize || true
+            docker compose -p "${PROJECT_NAME}" --env-file "${SHARED_PATH}/.env" exec -T app php artisan migrate --force
+            docker compose -p "${PROJECT_NAME}" --env-file "${SHARED_PATH}/.env" exec -T app php artisan db:seed --force || true
+            docker compose -p "${PROJECT_NAME}" --env-file "${SHARED_PATH}/.env" exec -T app php artisan optimize:clear || true
+            docker compose -p "${PROJECT_NAME}" --env-file "${SHARED_PATH}/.env" exec -T app php artisan optimize || true
 
             # 8. SWAP ATÔMICO
             echo "🔀 Trocando ponteiro da versão atual (Swap Atômico)..."

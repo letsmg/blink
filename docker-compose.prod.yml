@@ -109,5 +109,5 @@ volumes:
 
 networks:
   blink-net:    
-    name: blink-prod-net
+    name: blink-net
     external: true
