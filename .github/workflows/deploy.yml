@@ -104,14 +104,7 @@ jobs:
               cp docker-compose.hom.yml docker-compose.yml
             fi
 
-            # 4. Parar containers anteriores
-            if [ -L "${ROOT_PATH}/current" ]; then
-              cd "${ROOT_PATH}/current"
-              docker compose --env-file "${SHARED_PATH}/.env" down --remove-orphans || true
-            fi
-            docker rm -f blinkapp-${ENV_LABEL} blink-${ENV_LABEL}-app blink-${ENV_LABEL}-redis blink-${ENV_LABEL}-psql blink-${ENV_LABEL}-nginx 2>/dev/null || true
-
-            # 5. Sincronização e Symlinks
+            # 4. Sincronização de Storage e Symlinks na NOVA RELEASE
             if [ -d "${NEW_RELEASE}/storage/app/public" ]; then
               sudo cp -R "${NEW_RELEASE}/storage/app/public/." "${SHARED_PATH}/storage/app/public/" || true
             fi
@@ -121,33 +114,33 @@ jobs:
             sudo ln -sfn "${SHARED_PATH}/storage/app/public" "${NEW_RELEASE}/public/storage"
             sudo ln -sfn "${SHARED_PATH}/.env" "${NEW_RELEASE}/.env"
 
-            # 6. Permissões unificadas no Host
+            # 5. Permissões no Host
             sudo chown -R ubuntu:www-data "${NEW_RELEASE}" "${SHARED_PATH}/storage"
             sudo chmod -R 777 "${SHARED_PATH}/storage" "${NEW_RELEASE}/bootstrap/cache" 2>/dev/null || true
 
-            # 7. Swap Atômico (Feito ANTES de subir o docker)
-            echo "🔀 Trocando ponteiro da versão atual (Swap Atômico)..."
-            sudo ln -sfn "${NEW_RELEASE}" "${ROOT_PATH}/current"
-
-            # 8. Docker Build & Up
-            cd "${ROOT_PATH}/current"
+            # 6. Docker Build & Up diretamente na pasta da NOVA RELEASE
+            cd "${NEW_RELEASE}"
             sudo docker network create blink-${ENV_LABEL}-net 2>/dev/null || true
             sudo docker volume create blink-${ENV_LABEL}-pgsql-data 2>/dev/null || true
             sudo docker volume create blink-${ENV_LABEL}-redis-data 2>/dev/null || true
 
             docker compose --env-file "${SHARED_PATH}/.env" up -d --build --remove-orphans
 
-            # 9. Comandos internos do Laravel (usando -T e com || true)
+            # 7. Execução dos comandos Artisan na nova release
             docker compose --env-file "${SHARED_PATH}/.env" exec -T app chmod 777 /tmp || true
             docker compose --env-file "${SHARED_PATH}/.env" exec -T app chown -R www-data:www-data storage bootstrap/cache || true
             docker compose --env-file "${SHARED_PATH}/.env" exec -T app chmod -R 777 storage bootstrap/cache || true
 
-            docker compose --env-file "${SHARED_PATH}/.env" exec -T app php artisan migrate --force || true
+            docker compose --env-file "${SHARED_PATH}/.env" exec -T app php artisan migrate --force
             docker compose --env-file "${SHARED_PATH}/.env" exec -T app php artisan db:seed --force || true
             docker compose --env-file "${SHARED_PATH}/.env" exec -T app php artisan optimize:clear || true
             docker compose --env-file "${SHARED_PATH}/.env" exec -T app php artisan optimize || true
 
-            # 10. Limpeza de Releases antigas (Mantendo as 5 mais recentes)
+            # 8. SWAP ATÔMICO (Só é executado se tudo acima deu 100% certo)
+            echo "🔀 Trocando ponteiro da versão atual (Swap Atômico)..."
+            sudo ln -sfn "${NEW_RELEASE}" "${ROOT_PATH}/current"
+
+            # 9. Limpeza de Releases antigas
             cd "${RELEASES_PATH}"
             CURRENT_ACTIVE=$(readlink -f "${ROOT_PATH}/current" || true)
             ls -1dt */ 2>/dev/null | tail -n +6 | while read -r dir; do
