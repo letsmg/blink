@@ -134,17 +134,17 @@ jobs:
               fi
             fi
 
-            echo "🛑 Parando containers antigos na release anterior..."
+            echo "🛑 Parando containers antigos..."
             if [ -e "${CURRENT_LINK}" ]; then
                 cd "${CURRENT_LINK}"
                 docker compose --env-file "${SHARED_PATH}/.env" down --remove-orphans || true
             fi
 
             docker rm -f \
-                blink-redis-${ENV_LABEL} \
-                blink-psql-${ENV_LABEL} \
-                blink-nginx-${ENV_LABEL} \
-                blinkapp-${ENV_LABEL} 2>/dev/null || true
+                blink-${ENV_LABEL}-redis \
+                blink-${ENV_LABEL}-psql \
+                blink-${ENV_LABEL}-nginx \
+                blink-${ENV_LABEL}-app 2>/dev/null || true
 
             echo "🖼️ Sincronizando uploads e links da nova release..."
             if [ -d "${NEW_RELEASE}/storage/app/public" ]; then
@@ -182,19 +182,19 @@ jobs:
             fi
 
             echo "🛠️ Ajustando permissões internas dos containers..."
-            docker compose --env-file "${SHARED_PATH}/.env" exec -T app chmod 777 /tmp || true
-            docker compose --env-file "${SHARED_PATH}/.env" exec -T app chown -R www-data:www-data storage bootstrap/cache || true
-            docker compose --env-file "${SHARED_PATH}/.env" exec -T app chmod -R 777 storage bootstrap/cache || true
+            docker compose --env-file "${SHARED_PATH}/.env" exec -T app chmod 777 /tmp
+            docker compose --env-file "${SHARED_PATH}/.env" exec -T app chown -R www-data:www-data storage bootstrap/cache
+            docker compose --env-file "${SHARED_PATH}/.env" exec -T app chmod -R 777 storage bootstrap/cache
 
             echo "🗄️ Executando migrations e seeds..."
-            docker compose --env-file "${SHARED_PATH}/.env" exec -T app php artisan migrate --force || true
-            docker compose --env-file "${SHARED_PATH}/.env" exec -T app php artisan db:seed --force || true
+            docker compose --env-file "${SHARED_PATH}/.env" exec -T app php artisan migrate --force
+            docker compose --env-file "${SHARED_PATH}/.env" exec -T app php artisan db:seed --force
 
             echo "⚡ Gerando caches do Laravel..."
-            docker compose --env-file "${SHARED_PATH}/.env" exec -T app php artisan optimize:clear || true
-            docker compose --env-file "${SHARED_PATH}/.env" exec -T app php artisan config:cache || true
-            docker compose --env-file "${SHARED_PATH}/.env" exec -T app php artisan route:cache || true
-            docker compose --env-file "${SHARED_PATH}/.env" exec -T app php artisan view:cache || true
+            docker compose --env-file "${SHARED_PATH}/.env" exec -T app php artisan optimize:clear
+            docker compose --env-file "${SHARED_PATH}/.env" exec -T app php artisan config:cache
+            docker compose --env-file "${SHARED_PATH}/.env" exec -T app php artisan route:cache
+            docker compose --env-file "${SHARED_PATH}/.env" exec -T app php artisan view:cache
 
             echo "=========================================="
             echo "🔀 REALIZANDO SWAP ATÔMICO"
