@@ -133,11 +133,10 @@ jobs:
             echo "🛑 Parando e limpando containers antigos..."
             if [ -e "${CURRENT_LINK}" ]; then
                 cd "${CURRENT_LINK}"
-                docker compose --env-file "${SHARED_PATH}/.env" down --remove-orphans || true
+                sudo docker compose --env-file "${SHARED_PATH}/.env" down --remove-orphans || true
             fi
 
-            # Remove containers antigos do padrão antigo (blinkapp) e novo (blink-hom-app / blink-prod-app)
-            docker rm -f \
+            sudo docker rm -f \
                 blinkapp-${ENV_LABEL} \
                 blink-${ENV_LABEL}-app \
                 blink-${ENV_LABEL}-nginx \
@@ -178,19 +177,21 @@ jobs:
             echo "⏳ Aguardando inicialização completa do container..."
             sleep 8
 
+            APP_CONTAINER="blink-${ENV_LABEL}-app"
+
             echo "🛠️ Ajustando permissões internas dos containers (como root)..."
-            sudo docker compose -f "${NEW_RELEASE}/docker-compose.yml" --env-file "${SHARED_PATH}/.env" exec -u root -T app chmod 777 /tmp
-            sudo docker compose -f "${NEW_RELEASE}/docker-compose.yml" --env-file "${SHARED_PATH}/.env" exec -u root -T app chown -R www-data:www-data /var/www/storage /var/www/bootstrap/cache
-            sudo docker compose -f "${NEW_RELEASE}/docker-compose.yml" --env-file "${SHARED_PATH}/.env" exec -u root -T app chmod -R 775 /var/www/storage /var/www/bootstrap/cache
+            sudo docker exec -u root -i "${APP_CONTAINER}" chmod 777 /tmp
+            sudo docker exec -u root -i "${APP_CONTAINER}" chown -R www-data:www-data /var/www/storage /var/www/bootstrap/cache
+            sudo docker exec -u root -i "${APP_CONTAINER}" chmod -R 775 /var/www/storage /var/www/bootstrap/cache
 
             echo "🗄️ Executando migrations e seeds..."
-            sudo docker compose -f "${NEW_RELEASE}/docker-compose.yml" --env-file "${SHARED_PATH}/.env" exec -T app php artisan migrate --force
-            sudo docker compose -f "${NEW_RELEASE}/docker-compose.yml" --env-file "${SHARED_PATH}/.env" exec -T app php artisan db:seed --force
+            sudo docker exec -i "${APP_CONTAINER}" php artisan migrate --force
+            sudo docker exec -i "${APP_CONTAINER}" php artisan db:seed --force
 
             echo "⚡ Gerando caches do Laravel..."
-            sudo docker compose -f "${NEW_RELEASE}/docker-compose.yml" --env-file "${SHARED_PATH}/.env" exec -T app php artisan config:cache
-            sudo docker compose -f "${NEW_RELEASE}/docker-compose.yml" --env-file "${SHARED_PATH}/.env" exec -T app php artisan route:cache
-            sudo docker compose -f "${NEW_RELEASE}/docker-compose.yml" --env-file "${SHARED_PATH}/.env" exec -T app php artisan view:cache
+            sudo docker exec -i "${APP_CONTAINER}" php artisan config:cache
+            sudo docker exec -i "${APP_CONTAINER}" php artisan route:cache
+            sudo docker exec -i "${APP_CONTAINER}" php artisan view:cache
 
             echo "=========================================="
             echo "🔀 REALIZANDO SWAP ATÔMICO"
