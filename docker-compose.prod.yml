@@ -2,11 +2,11 @@ name: blink-prod
 
 services:  
   app:
-    container_name: blinkapp-prod
+    container_name: blink-prod-app
     build:
       context: .
       dockerfile: Dockerfile      
-    image: blinkapp-prod:latest
+    image: blink-prod-app:latest
     restart: unless-stopped
     working_dir: /var/www
     volumes:

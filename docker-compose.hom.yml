@@ -2,11 +2,11 @@ name: blink-hom
 
 services:  
   app:
-    container_name: blinkapp-hom
+    container_name: blink-hom-app
     build:
       context: .
       dockerfile: Dockerfile      
-    image: blinkapp-hom:latest
+    image: blink-hom-app:latest
     restart: unless-stopped
     working_dir: /var/www
     volumes:
