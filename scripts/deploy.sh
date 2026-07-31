@@ -46,6 +46,9 @@ SHARED_PATH="${TARGET_ROOT}/shared"
 RELEASES_PATH="${TARGET_ROOT}/releases"
 CURRENT_LINK="${TARGET_ROOT}/current"
 
+# ⚠️ Exporta variáveis para o Docker Compose ler
+export CURRENT_LINK DOCKER_NETWORK VOLUME_PGSQL VOLUME_REDIS
+
 echo -e "${BLUE}====================================================${NC}"
 echo -e "${BLUE} 🚀 INICIANDO DEPLOY - AMBIENTE: ${ENV_LABEL^^} ${NC}"
 echo -e "${BLUE}====================================================${NC}"
@@ -59,7 +62,7 @@ echo ""
 # ------------------------------------------------------------
 echo "📁 Preparando diretórios compartilhados..."
 sudo mkdir -p "${RELEASES_PATH}"
-sudo mkdir -p "${SHARED_PATH}/storage"/{app/public,framework/{cache,sessions,views},logs}
+sudo mkdir -p "${SHARED_PATH}/storage"/{app/public,framework/{cache/data,sessions,views},logs}
 
 # Cria o .env compartilhado APENAS na primeira execução (se não existir)
 if [ ! -f "${SHARED_PATH}/.env" ]; then
@@ -75,17 +78,13 @@ if [ ! -f "${SHARED_PATH}/.env" ]; then
   fi
 fi
 
-# Corrige o proprietário de toda a estrutura do projeto para o usuário de deploy
+# Corrige o proprietário de toda a estrutura para o seu usuário de deploy
 echo "🔑 Ajustando proprietários e permissões em ${TARGET_ROOT}..."
 sudo chown -R $USER:www-data "${TARGET_ROOT}"
 
 # Ajusta permissões nos arquivos e pastas compartilhados
-sudo find "${SHARED_PATH}" -type d -exec chmod 775 {} \;
-sudo find "${SHARED_PATH}" -type f -exec chmod 664 {} \;
-sudo chmod 664 "${SHARED_PATH}/.env"
-
-# Exporta as variáveis apenas na memória do shell
-export DOCKER_NETWORK VOLUME_PGSQL VOLUME_REDIS
+chmod -R 775 "${SHARED_PATH}"
+chmod 664 "${SHARED_PATH}/.env"
 
 # ------------------------------------------------------------
 # 2. DEFINIÇÃO DA RELEASE & CÓPIA DO CÓDIGO-FONTE
@@ -105,10 +104,10 @@ RELEASE_NAME="${NOW_DATE}-${SEQ_FORMATTED}"
 NEW_RELEASE="${RELEASES_PATH}/${RELEASE_NAME}"
 
 echo "📦 Criando Release #${NEXT_SEQ}: ${RELEASE_NAME}"
-sudo mkdir -p "${NEW_RELEASE}"
+mkdir -p "${NEW_RELEASE}"
 
 echo "📋 Copiando código-fonte para a release..."
-sudo rsync -av \
+rsync -av \
   --exclude '.git' \
   --exclude 'node_modules' \
   --exclude 'vendor' \
@@ -120,25 +119,29 @@ sudo rsync -av \
   "${PROJECT_ROOT}/" "${NEW_RELEASE}/"
 
 cd "${NEW_RELEASE}"
-sudo chown -R $USER:$USER "${NEW_RELEASE}"
 
 # ------------------------------------------------------------
 # 3. SYMLINKS E PERMISSÕES NA NOVA RELEASE
 # ------------------------------------------------------------
 echo "🔗 Criando symlinks para a pasta shared..."
-sudo mkdir -p "${NEW_RELEASE}/public"
+mkdir -p "${NEW_RELEASE}/public"
 
 if [ -d "${NEW_RELEASE}/storage/app/public" ]; then
-  sudo cp -R "${NEW_RELEASE}/storage/app/public/." "${SHARED_PATH}/storage/app/public/" 2>/dev/null || true
+  cp -R "${NEW_RELEASE}/storage/app/public/." "${SHARED_PATH}/storage/app/public/" 2>/dev/null || true
 fi
 
-sudo rm -rf "${NEW_RELEASE}/storage" "${NEW_RELEASE}/public/storage" "${NEW_RELEASE}/.env"
-sudo ln -sfn "${SHARED_PATH}/storage" "${NEW_RELEASE}/storage"
-sudo ln -sfn "${SHARED_PATH}/storage/app/public" "${NEW_RELEASE}/public/storage"
-sudo ln -sfn "${SHARED_PATH}/.env" "${NEW_RELEASE}/.env"
+rm -rf "${NEW_RELEASE}/storage" "${NEW_RELEASE}/public/storage" "${NEW_RELEASE}/.env"
+ln -sfn "${SHARED_PATH}/storage" "${NEW_RELEASE}/storage"
+ln -sfn "${SHARED_PATH}/storage/app/public" "${NEW_RELEASE}/public/storage"
+ln -sfn "${SHARED_PATH}/.env" "${NEW_RELEASE}/.env"
 
-sudo chown -R $USER:www-data "${NEW_RELEASE}" "${SHARED_PATH}/storage"
-sudo chmod -R 777 "${SHARED_PATH}/storage" "${NEW_RELEASE}/bootstrap/cache" 2>/dev/null || true
+chmod -R 775 "${NEW_RELEASE}/bootstrap/cache" 2>/dev/null || true
+
+# 🛡️ TRAVA DE SEGURANÇA DOCKER: Garante que o symlink 'current' exista antes do Compose subir
+if [ ! -L "${CURRENT_LINK}" ] && [ ! -d "${CURRENT_LINK}" ]; then
+  echo "🔗 Criando symlink 'current' inicial..."
+  ln -sfn "${NEW_RELEASE}" "${CURRENT_LINK}"
+fi
 
 # ------------------------------------------------------------
 # 4. DEPENDÊNCIAS (COMPOSER & NPM)
@@ -154,11 +157,15 @@ if [ -f "package.json" ]; then
 fi
 
 # ------------------------------------------------------------
-# 5. CONTAINERS DOCKER
+# 5. ATUALIZAÇÃO ATÔMICA & DOCKER
 # ------------------------------------------------------------
 echo "🐳 Garantindo infraestrutura Docker..."
-sudo docker volume create "${VOLUME_PGSQL}" 2>/dev/null || true
-sudo docker volume create "${VOLUME_REDIS}" 2>/dev/null || true
+docker volume create "${VOLUME_PGSQL}" 2>/dev/null || true
+docker volume create "${VOLUME_REDIS}" 2>/dev/null || true
+
+# Aponta o symlink 'current' para a nova release
+echo "🔄 Atualizando symlink 'current' para a nova release..."
+ln -sfn "${NEW_RELEASE}" "${CURRENT_LINK}"
 
 docker compose -f "${PROJECT_ROOT}/${DOCKER_COMPOSE}" -p "${PROJECT_NAME}" --env-file "${SHARED_PATH}/.env" up -d --build --remove-orphans
 
@@ -184,41 +191,23 @@ if [ "$UNTIL_RUNNING" = false ]; then
 fi
 
 # ------------------------------------------------------------
-# 6. MIGRATIONS NA NOVA RELEASE (ANTES DE MUDAR O CURRENT)
+# 6. MIGRATIONS & OTIMIZAÇÕES ARTISAN
 # ------------------------------------------------------------
-echo "⚡ Executando migrations na nova release..."
-docker compose -f "${PROJECT_ROOT}/${DOCKER_COMPOSE}" -p "${PROJECT_NAME}" --env-file "${SHARED_PATH}/.env" run --rm -v "${NEW_RELEASE}:/var/www" app php artisan migrate --force
-
-# ------------------------------------------------------------
-# 7. ATUALIZAR SYMLINK CURRENT (Deploy Atômico)
-# ------------------------------------------------------------
-echo "🔄 Apontando 'current' para a nova release..."
-sudo ln -sfn "${NEW_RELEASE}" "${CURRENT_LINK}"
-
-# Recarrega o container para assumir o novo symlink 'current'
-docker compose -f "${PROJECT_ROOT}/${DOCKER_COMPOSE}" -p "${PROJECT_NAME}" --env-file "${SHARED_PATH}/.env" up -d --remove-orphans
-
-# ------------------------------------------------------------
-# 8. LARAVEL ARTISAN & OTIMIZAÇÕES
-# ------------------------------------------------------------
-echo "⚡ Executando rotinas finais no Artisan..."
-docker compose -f "${PROJECT_ROOT}/${DOCKER_COMPOSE}" -p "${PROJECT_NAME}" --env-file "${SHARED_PATH}/.env" exec -T app chmod 777 /tmp || true
-docker compose -f "${PROJECT_ROOT}/${DOCKER_COMPOSE}" -p "${PROJECT_NAME}" --env-file "${SHARED_PATH}/.env" exec -T app chown -R www-data:www-data storage bootstrap/cache || true
-docker compose -f "${PROJECT_ROOT}/${DOCKER_COMPOSE}" -p "${PROJECT_NAME}" --env-file "${SHARED_PATH}/.env" exec -T app chmod -R 777 storage bootstrap/cache || true
-
+echo "⚡ Executando rotinas finais do Laravel..."
+docker compose -f "${PROJECT_ROOT}/${DOCKER_COMPOSE}" -p "${PROJECT_NAME}" --env-file "${SHARED_PATH}/.env" exec -T app php artisan migrate --force
 docker compose -f "${PROJECT_ROOT}/${DOCKER_COMPOSE}" -p "${PROJECT_NAME}" --env-file "${SHARED_PATH}/.env" exec -T app php artisan db:seed --force || true
 docker compose -f "${PROJECT_ROOT}/${DOCKER_COMPOSE}" -p "${PROJECT_NAME}" --env-file "${SHARED_PATH}/.env" exec -T app php artisan optimize:clear || true
 docker compose -f "${PROJECT_ROOT}/${DOCKER_COMPOSE}" -p "${PROJECT_NAME}" --env-file "${SHARED_PATH}/.env" exec -T app php artisan optimize || true
 
 # ------------------------------------------------------------
-# 9. ROTATIVIDADE (Manter últimas 5 releases)
+# 7. ROTATIVIDADE (Manter últimas 5 releases)
 # ------------------------------------------------------------
 echo "🧹 Limpando releases antigas (mantendo as 5 mais recentes)..."
 cd "${RELEASES_PATH}"
-sudo ls -1dt */ 2>/dev/null | tail -n +6 | xargs -I {} sudo rm -rf "{}" 2>/dev/null || true
+ls -1dt */ 2>/dev/null | tail -n +6 | xargs -I {} rm -rf "{}" 2>/dev/null || true
 
 # ------------------------------------------------------------
-# 10. HEALTH CHECK
+# 8. HEALTH CHECK
 # ------------------------------------------------------------
 DETECTED_PORT=$(docker compose -f "${PROJECT_ROOT}/${DOCKER_COMPOSE}" -p "${PROJECT_NAME}" port nginx 80 2>/dev/null | awk -F':' '{print $NF}' || true)
 if [ -z "$DETECTED_PORT" ]; then
