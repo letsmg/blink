@@ -1,32 +1,28 @@
 name: blink-prod
 
-services:  
+services:
   app:
-    container_name: blink-prod-app
+    container_name: ${PROJECT_NAME:-blink-prod}-app
     build:
       context: .
-      dockerfile: Dockerfile      
-    image: blink-prod-app:latest
+      dockerfile: Dockerfile
+    image: ${PROJECT_NAME:-blink-prod}-app:latest
     restart: unless-stopped
     working_dir: /var/www
     volumes:
-      # Aponta para o código da release atual (raiz de current)
-      - .:/var/www
-      # Monta o .env real do host diretamente dentro do container em /var/www/.env
-      - /var/www/blink/shared/.env:/var/www/.env
-      # Isola o storage na pasta shared para não perder arquivos nos deploys
-      - /var/www/blink/shared/storage:/var/www/storage
+      - .:/var/www      
+      - ../../shared/storage:/var/www/storage
       - ./docker/php/php.ini:/usr/local/etc/php/conf.d/blink.ini:ro
     environment:
       - APP_ENV=production
       - APP_DEBUG=false
-      - DB_HOST=blink-prod-psql
-      - DB_PORT=5432 # Dentro da rede do Docker a porta do Postgres é 5432 (5452 é apenas no Host)
+      - DB_HOST=pgsql
+      - DB_PORT=5432
       - DB_DATABASE=${DB_DATABASE:-blink_db}
       - DB_USERNAME=${DB_USERNAME:-blink_user}
       - DB_PASSWORD=${DB_PASSWORD}
-      - REDIS_HOST=blink-prod-redis
-      - REDIS_PORT=6379 # Dentro da rede do Docker a porta do Redis é 6379 (6383 é apenas no Host)
+      - REDIS_HOST=redis
+      - REDIS_PORT=6379
       - SESSION_DRIVER=${SESSION_DRIVER:-database}
       - CACHE_STORE=${CACHE_STORE:-redis}
       - QUEUE_CONNECTION=${QUEUE_CONNECTION:-redis}
@@ -35,32 +31,27 @@ services:
         condition: service_healthy
       redis:
         condition: service_healthy
-    networks:
-      - blink-net
     extra_hosts:
       - "host.docker.internal:host-gateway"
 
   nginx:
     image: nginx:alpine
-    container_name: blink-prod-nginx
+    container_name: ${PROJECT_NAME:-blink-prod}-nginx
     restart: unless-stopped
     ports:
       - "${APP_PORT:-8011}:80"
     volumes:
       - .:/var/www:ro
-      # Monta o storage compartilhado na pasta /var/www/storage de forma estática
-      - /var/www/blink/shared/storage:/var/www/storage:ro
+      - ../../shared/storage:/var/www/storage:ro
       - ./docker/nginx/default.conf:/etc/nginx/conf.d/default.conf:ro
     depends_on:
       - app
-    networks:
-      - blink-net
     extra_hosts:
       - "host.docker.internal:host-gateway"
 
   pgsql:
     image: postgres:16-alpine
-    container_name: blink-prod-psql
+    container_name: ${PROJECT_NAME:-blink-prod}-psql
     restart: unless-stopped
     environment:
       POSTGRES_USER: ${DB_USERNAME:-blink_user}
@@ -70,8 +61,6 @@ services:
       - pgsql-data:/var/lib/postgresql/data
     ports:
       - "${DB_PORT_EXTERNAL:-5452}:5432"
-    networks:
-      - blink-net
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U ${DB_USERNAME:-blink_user} -d ${DB_DATABASE:-blink_db}"]
       interval: 5s
@@ -80,7 +69,7 @@ services:
 
   redis:
     image: redis:7-alpine
-    container_name: blink-prod-redis
+    container_name: ${PROJECT_NAME:-blink-prod}-redis
     restart: unless-stopped
     command: >
       redis-server
@@ -91,8 +80,6 @@ services:
       - redis-data:/data
     ports:
       - "${REDIS_PORT_EXTERNAL:-6383}:6379"
-    networks:
-      - blink-net
     healthcheck:
       test: ["CMD", "redis-cli", "ping"]
       interval: 5s
@@ -101,13 +88,10 @@ services:
 
 volumes:
   pgsql-data:
-    name: blink-prod-pgsql-data
-    external: true
+    name: ${VOLUME_PGSQL:-blink-prod-pgsql-data}
   redis-data:
-    name: blink-prod-redis-data
-    external: true
+    name: ${VOLUME_REDIS:-blink-prod-redis-data}
 
 networks:
-  blink-net:    
-    name: blink-net
-    external: true
+  default:
+    name: ${DOCKER_NETWORK:-blink-prod-net}
