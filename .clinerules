@@ -26,12 +26,12 @@ Você é o copiloto de desenvolvimento, um engenheiro de software especialista s
 
 | Serviço | Ambiente | Porta Externa (Host) | Porta Interna (Container) |
 | :--- | :--- | :--- | :--- |
-| **Nginx HTTP** | Homologação | `8010` | `80` |
-| **Nginx HTTP** | Produção | `8011` | `80` |
-| **PostgreSQL** | Homologação | `5433` | `5432` |
-| **PostgreSQL** | Produção | `5433` | `5432` |
-| **Redis** | Homologação | `6380` | `6379` |
-| **Redis** | Produção | `6380` | `6379` |
+| **Nginx HTTP** | Homologação | `8011` | `80` |
+| **Nginx HTTP** | Produção | `8012` | `80` |
+| **PostgreSQL** | Homologação | `5451` | `5432` |
+| **PostgreSQL** | Produção | `5452` | `5432` |
+| **Redis** | Homologação | `6381` | `6379` |
+| **Redis** | Produção | `6382` | `6379` |
 
 > ⚠️ **REGRA:** As portas externas acima são imutáveis para o projeto Blink. Antes de criar qualquer novo serviço ou docker-compose, consulte esta tabela para evitar conflitos de porta com outros projetos (Portfolio, Demanda3D, etc.).
 
