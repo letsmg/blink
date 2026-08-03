@@ -24,6 +24,7 @@ if [ "$ENVIRONMENT" = "production" ] || [ "$ENVIRONMENT" = "prod" ] || [ "$ENVIR
   DOCKER_NETWORK="blink-prod-net"
   VOLUME_PGSQL="blink-prod-pgsql-data"
   VOLUME_REDIS="blink-prod-redis-data"
+  SRC_COMPOSE="docker-compose.prod.yml"
 else
   ENV_LABEL="hom"
   TARGET_ROOT="/var/www/blk/blink-hom"
@@ -31,15 +32,14 @@ else
   DOCKER_NETWORK="blink-hom-net"
   VOLUME_PGSQL="blink-hom-pgsql-data"
   VOLUME_REDIS="blink-hom-redis-data"
+  SRC_COMPOSE="docker-compose.hom.yml"
 fi
 
-# Seleção do Docker Compose
-if [ "$ENV_LABEL" = "prod" ] && [ -f "${PROJECT_ROOT}/docker-compose.prod.yml" ]; then
-  DOCKER_COMPOSE="docker-compose.prod.yml"
-elif [ -f "${PROJECT_ROOT}/docker-compose.hom.yml" ]; then
-  DOCKER_COMPOSE="docker-compose.hom.yml"
-else
-  DOCKER_COMPOSE="docker-compose.yml"
+# Padroniza a cópia e o nome do arquivo de composição Docker
+DOCKER_COMPOSE="docker-compose.yml"
+if [ -f "${PROJECT_ROOT}/${SRC_COMPOSE}" ]; then
+  echo "📄 Copiando arquivo de composição (${SRC_COMPOSE} -> ${DOCKER_COMPOSE})..."
+  cp "${PROJECT_ROOT}/${SRC_COMPOSE}" "${PROJECT_ROOT}/${DOCKER_COMPOSE}"
 fi
 
 SHARED_PATH="${TARGET_ROOT}/shared"
@@ -167,7 +167,7 @@ docker volume create "${VOLUME_REDIS}" 2>/dev/null || true
 echo "🔄 Atualizando symlink 'current' para a nova release..."
 ln -sfn "${NEW_RELEASE}" "${CURRENT_LINK}"
 
-docker compose -f "${PROJECT_ROOT}/${DOCKER_COMPOSE}" -p "${PROJECT_NAME}" --env-file "${SHARED_PATH}/.env" up -d --build --remove-orphans
+docker compose -f "${CURRENT_LINK}/${DOCKER_COMPOSE}" -p "${PROJECT_NAME}" --env-file "${SHARED_PATH}/.env" up -d --build --remove-orphans
 
 echo "⏳ Aguardando o container 'app' estabilizar..."
 MAX_RETRIES=15
@@ -191,13 +191,35 @@ if [ "$UNTIL_RUNNING" = false ]; then
 fi
 
 # ------------------------------------------------------------
+# 5.1 PERMISSÕES E ESTRUTURA INTERNA (Executa ANTES do Artisan)
+# ------------------------------------------------------------
+echo "🔑 Ajustando estrutura de diretórios e permissões do Laravel..."
+
+# 1. Cria todas as subpastas do framework no host e garante permissão 777 no shared e no current
+sudo mkdir -p "${SHARED_PATH}/storage"/{app/public,framework/{cache/data,sessions,views},logs}
+sudo chmod -R 777 "${SHARED_PATH}/storage"
+sudo chmod -R 777 "${CURRENT_LINK}/bootstrap/cache"
+
+# 2. Garante a criação e permissão internamente no container (sem usar -it)
+docker compose -f "${CURRENT_LINK}/${DOCKER_COMPOSE}" -p "${PROJECT_NAME}" --env-file "${SHARED_PATH}/.env" exec -T app mkdir -p storage/framework/views storage/framework/cache/data storage/framework/sessions storage/logs
+docker compose -f "${CURRENT_LINK}/${DOCKER_COMPOSE}" -p "${PROJECT_NAME}" --env-file "${SHARED_PATH}/.env" exec -T app chmod -R 777 storage bootstrap/cache
+
+# ------------------------------------------------------------
 # 6. MIGRATIONS & OTIMIZAÇÕES ARTISAN
 # ------------------------------------------------------------
 echo "⚡ Executando rotinas finais do Laravel..."
-docker compose -f "${PROJECT_ROOT}/${DOCKER_COMPOSE}" -p "${PROJECT_NAME}" --env-file "${SHARED_PATH}/.env" exec -T app php artisan migrate --force
-docker compose -f "${PROJECT_ROOT}/${DOCKER_COMPOSE}" -p "${PROJECT_NAME}" --env-file "${SHARED_PATH}/.env" exec -T app php artisan db:seed --force || true
-docker compose -f "${PROJECT_ROOT}/${DOCKER_COMPOSE}" -p "${PROJECT_NAME}" --env-file "${SHARED_PATH}/.env" exec -T app php artisan optimize:clear || true
-docker compose -f "${PROJECT_ROOT}/${DOCKER_COMPOSE}" -p "${PROJECT_NAME}" --env-file "${SHARED_PATH}/.env" exec -T app php artisan optimize || true
+
+# 1º PRIMEIRO: Executa as migrations para criar as tabelas do banco (incluindo a tabela 'cache')
+docker compose -f "${CURRENT_LINK}/${DOCKER_COMPOSE}" -p "${PROJECT_NAME}" --env-file "${SHARED_PATH}/.env" exec -T app php artisan migrate --force
+
+# 2º SEGUNDO: Se for ambiente de homologação, executa as seeds
+if [ "$ENV_LABEL" = "hom" ]; then
+  docker compose -f "${CURRENT_LINK}/${DOCKER_COMPOSE}" -p "${PROJECT_NAME}" --env-file "${SHARED_PATH}/.env" exec -T app php artisan db:seed --force || true
+fi
+
+# 3º TERCEIRO: Agora que o banco está pronto, limpa e gera as otimizações de cache
+docker compose -f "${CURRENT_LINK}/${DOCKER_COMPOSE}" -p "${PROJECT_NAME}" --env-file "${SHARED_PATH}/.env" exec -T app php artisan optimize:clear
+docker compose -f "${CURRENT_LINK}/${DOCKER_COMPOSE}" -p "${PROJECT_NAME}" --env-file "${SHARED_PATH}/.env" exec -T app php artisan optimize
 
 # ------------------------------------------------------------
 # 7. ROTATIVIDADE (Manter últimas 5 releases)
@@ -209,15 +231,15 @@ ls -1dt */ 2>/dev/null | tail -n +6 | xargs -I {} rm -rf "{}" 2>/dev/null || tru
 # ------------------------------------------------------------
 # 8. HEALTH CHECK
 # ------------------------------------------------------------
-DETECTED_PORT=$(docker compose -f "${PROJECT_ROOT}/${DOCKER_COMPOSE}" -p "${PROJECT_NAME}" port nginx 80 2>/dev/null | awk -F':' '{print $NF}' || true)
+DETECTED_PORT=$(docker compose -f "${CURRENT_LINK}/${DOCKER_COMPOSE}" -p "${PROJECT_NAME}" port nginx 80 2>/dev/null | awk -F':' '{print $NF}' || true)
 if [ -z "$DETECTED_PORT" ]; then
-  DETECTED_PORT=$(docker compose -f "${PROJECT_ROOT}/${DOCKER_COMPOSE}" -p "${PROJECT_NAME}" port web 80 2>/dev/null | awk -F':' '{print $NF}' || true)
+  DETECTED_PORT=$(docker compose -f "${CURRENT_LINK}/${DOCKER_COMPOSE}" -p "${PROJECT_NAME}" port web 80 2>/dev/null | awk -F':' '{print $NF}' || true)
 fi
 APP_PORT=${DETECTED_PORT:-80}
 
 echo "🩺 Verificando resposta da aplicação na porta ${APP_PORT}..."
 SUCCESS=false
-for i in {1..15}; do
+for i in {1..5}; do
   HTTP_STATUS=$(curl -s -o /dev/null -w "%{http_code}" "http://localhost:${APP_PORT}/" || true)
   if [[ "$HTTP_STATUS" =~ ^(200|301|302|401)$ ]]; then
     echo -e "${GREEN}✅ Aplicação respondendo! (HTTP $HTTP_STATUS)${NC}"
