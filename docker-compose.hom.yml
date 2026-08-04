@@ -1,23 +1,19 @@
 services:
   app:
-    container_name: ${PROJECT_NAME:-blink-hom}-app
     build:
-      context: ${CURRENT_LINK:-../current}
+      context: ${RELEASE_PATH}
       dockerfile: Dockerfile
     image: ${PROJECT_NAME:-blink-hom}-app:${IMAGE_TAG:-latest}
     restart: unless-stopped
     working_dir: /var/www
 
-    # Injeta as variáveis de ambiente do host no container da aplicação (PHP-FPM)
     env_file:
-      - ../shared/.env
+      - ${SHARED_DIR}/.env
 
-    # Permite sobrescrever se as migrations devem rodar no boot via .env
     environment:
       RUN_MIGRATIONS: ${RUN_MIGRATIONS:-true}
 
     volumes:
-      # Uploads/Mídias persistentes
       - storage-data:/var/www/storage
 
     extra_hosts:
@@ -30,28 +26,33 @@ services:
         condition: service_healthy
 
   nginx:
-    container_name: ${PROJECT_NAME:-blink-hom}-nginx
-    # Reutiliza a mesma imagem imutável
     image: ${PROJECT_NAME:-blink-hom}-app:${IMAGE_TAG:-latest}
     restart: unless-stopped
     command: ["nginx", "-g", "daemon off;"]
     ports:
       - "${APP_PORT:-8011}:80"
 
-    # ⚠️ Sem env_file aqui: O Nginx serve estáticos/proxy sem precisar de credenciais de banco ou APP_KEY
+    env_file:
+      - ${SHARED_DIR}/.env
 
-    volumes:
+    volumes:      
       - storage-data:/var/www/storage
 
     depends_on:
       - app
 
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost/"]
+      interval: 10s
+      timeout: 5s
+      retries: 3
+      start_period: 10s
+
   pgsql:
-    container_name: ${PROJECT_NAME:-blink-hom}-pgsql
     image: postgres:16-alpine
     restart: unless-stopped
     env_file:
-      - ../shared/.env
+      - ${SHARED_DIR}/.env
     environment:
       POSTGRES_DB: ${DB_DATABASE:-blink_hom}
       POSTGRES_USER: ${DB_USERNAME:-blink_user}
@@ -65,7 +66,6 @@ services:
       retries: 5
 
   redis:
-    container_name: ${PROJECT_NAME:-blink-hom}-redis
     image: redis:7-alpine
     restart: unless-stopped
     command: redis-server --requirepass ${REDIS_PASSWORD:-secret}
@@ -80,6 +80,7 @@ services:
 networks:
   default:
     name: ${DOCKER_NETWORK:-blink-hom-net}
+    external: true
 
 volumes:
   storage-data:

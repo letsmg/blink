@@ -1,12 +1,13 @@
 .git
 .github
 node_modules
-#vendor nao pode retirar ela
+vendor
 .env
 .env.*
-*.md
 tests
-storage/framework/*
+storage/framework/cache/*
+storage/framework/sessions/*
+storage/framework/views/*
 storage/logs/*
 docker-compose.override.yml
 .phpunit.result.cache

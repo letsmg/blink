@@ -23,9 +23,15 @@ class SetPostgresSessionVariables
     public function handle(Request $request, Closure $next): Response
     {
         if ($user = $request->user()) {
+            $pdo = DB::connection()->getPdo();
+
+            // Protege e formata os valores de forma segura para o SQL do Postgres
+            $userId = $pdo->quote((string) $user->id);
+            $userRole = $pdo->quote($user->role->value);
+
             // SET LOCAL garante que o valor só existe durante a transação atual
-            DB::statement('SET LOCAL app.current_user_id = ?', [(string) $user->id]);
-            DB::statement('SET LOCAL app.current_user_role = ?', [$user->role->value]);
+            DB::statement("SET LOCAL app.current_user_id = {$userId}");
+            DB::statement("SET LOCAL app.current_user_role = {$userRole}");
         }
 
         return $next($request);

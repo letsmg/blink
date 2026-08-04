@@ -96,7 +96,7 @@ RUN chmod +x /usr/local/bin/entrypoint.sh
 
 # Healthcheck HTTP usando a rota /up do Laravel
 HEALTHCHECK --interval=30s --timeout=5s --start-period=15s --retries=3 \
-    CMD curl -f http://localhost/up || exit 1
+    CMD php artisan about --no-ansi > /dev/null || exit 1
 
 EXPOSE 80 9000
 
