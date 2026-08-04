@@ -1,257 +1,440 @@
-#!/bin/bash
-set -e
+#!/usr/bin/env bash
 
-# ============================================================
-# 🚀 Blink - Script Principal de Deploy (Fonte Única)
-# ============================================================
-# Uso: bash scripts/deploy.sh [staging|production]
-# ============================================================
+set -euo pipefail
 
-RED='\033[0;31m'
-GREEN='\033[0;32m'
-YELLOW='\033[1;33m'
-BLUE='\033[0;34m'
-NC='\033[0m'
+# ==============================================================================
+# SCRIPT DE DEPLOY & ROLLBACK ATÔMICO / IMUTÁVEL (Laravel + Docker)
+# ==============================================================================
 
-ENVIRONMENT=${1:-staging}
-PROJECT_ROOT="$(pwd)"
+ACTION="${1:-deploy}"
+ENV_INPUT="${2:-hom}"
 
-# Define variáveis por ambiente
-if [ "$ENVIRONMENT" = "production" ] || [ "$ENVIRONMENT" = "prod" ] || [ "$ENVIRONMENT" = "main" ]; then
-  ENV_LABEL="prod"
-  TARGET_ROOT="/var/www/blk/blink-prod"
-  PROJECT_NAME="blink-prod"
-  DOCKER_NETWORK="blink-prod-net"
-  VOLUME_PGSQL="blink-prod-pgsql-data"
-  VOLUME_REDIS="blink-prod-redis-data"
-  SRC_COMPOSE="docker-compose.prod.yml"
-else
-  ENV_LABEL="hom"
-  TARGET_ROOT="/var/www/blk/blink-hom"
-  PROJECT_NAME="blink-hom"
-  DOCKER_NETWORK="blink-hom-net"
-  VOLUME_PGSQL="blink-hom-pgsql-data"
-  VOLUME_REDIS="blink-hom-redis-data"
-  SRC_COMPOSE="docker-compose.hom.yml"
+# 1. Trava contra execuções concorrentes (Concurrency Lock)
+LOCK_FILE="/tmp/blink-deploy-${ENV_INPUT}.lock"
+exec 200>"${LOCK_FILE}"
+if ! flock -n 200; then
+    echo "❌ ERRO: Já existe um deploy ou rollback em execução para [${ENV_INPUT}]."
+    exit 1
 fi
 
-# Padroniza a cópia e o nome do arquivo de composição Docker
-DOCKER_COMPOSE="docker-compose.yml"
-if [ -f "${PROJECT_ROOT}/${SRC_COMPOSE}" ]; then
-  echo "📄 Copiando arquivo de composição (${SRC_COMPOSE} -> ${DOCKER_COMPOSE})..."
-  cp "${PROJECT_ROOT}/${SRC_COMPOSE}" "${PROJECT_ROOT}/${DOCKER_COMPOSE}"
+# 2. Mapeamento explícito de ambiente
+case "${ENV_INPUT}" in
+    prod|production|main)
+        ENVIRONMENT="prod"
+        PROJECT_NAME="blink-prod"
+        COMPOSE_FILE="docker-compose.prod.yml"
+        ;;
+    hom|staging|dev)
+        ENVIRONMENT="hom"
+        PROJECT_NAME="blink-hom"
+        COMPOSE_FILE="docker-compose.hom.yml"
+        ;;
+    *)
+        echo "❌ Ambiente inválido: '${ENV_INPUT}'. Use 'hom' ou 'prod'."
+        exit 1
+        ;;
+esac
+
+# Identificação Git & Metadata Avançado
+GIT_COMMIT=$(git rev-parse --short HEAD 2>/dev/null || echo "nogit")
+GIT_BRANCH=$(git rev-parse --abbrev-ref HEAD 2>/dev/null || echo "unknown")
+GIT_AUTHOR=$(git log -1 --format='%an' 2>/dev/null || echo "unknown")
+GIT_REMOTE=$(git config --get remote.origin.url 2>/dev/null || echo "unknown")
+DOCKER_VER=$(docker --version 2>/dev/null || echo "unknown")
+KERNEL_VER=$(uname -r 2>/dev/null || echo "unknown")
+RELEASE_TAG="$(date +%Y%m%d%H%M%S)-${GIT_COMMIT}"
+
+# Caminhos Base
+BASE_DIR="/var/www/${PROJECT_NAME}"
+RELEASES_DIR="${BASE_DIR}/releases"
+SHARED_DIR="${BASE_DIR}/shared"
+LOGS_DIR="${SHARED_DIR}/logs/deploy"
+CURRENT_LINK="${BASE_DIR}/current"
+NEW_RELEASE_DIR="${RELEASES_DIR}/${RELEASE_TAG}"
+
+# Redirecionamento de Logs para Arquivo e Terminal em Tempo Real
+mkdir -p "${LOGS_DIR}"
+DEPLOY_LOG_FILE="${LOGS_DIR}/deploy-$(date +%Y%m%d).log"
+exec > >(tee -a "${DEPLOY_LOG_FILE}") 2>&1
+
+echo "======================================================================"
+echo "▶ Execute: ${0} ${ACTION} ${ENV_INPUT} | Data: $(date -u +"%Y-%m-%dT%H:%M:%SZ")"
+echo "======================================================================"
+
+# Exportação de Variáveis Globais para o Docker Compose
+export PROJECT_NAME="${PROJECT_NAME}"
+export IMAGE_TAG="${IMAGE_TAG:-${GIT_COMMIT}}"
+export DOCKER_NETWORK="${DOCKER_NETWORK:-${PROJECT_NAME}-net}"
+
+# ------------------------------------------------------------------------------
+# HELPER: ATUALIZAÇÃO SEGURA DO JSON VIA PYTHON3 (Não aborta o script em falha)
+# ------------------------------------------------------------------------------
+update_json_status() {
+    local json_file="$1"
+    local status_val="$2"
+
+    if [ ! -f "${json_file}" ]; then return 0; fi
+
+    if command -v python3 >/dev/null 2>&1; then
+        python3 - "${json_file}" "${status_val}" << 'EOF' || true
+import json, sys
+try:
+    json_file, status_val = sys.argv[1], sys.argv[2]
+    with open(json_file, 'r') as f:
+        data = json.load(f)
+    data['status'] = status_val
+    with open(json_file, 'w') as f:
+        json.dump(data, f, indent=2)
+except Exception as e:
+    print(f"⚠️ AVISO: Não foi possível atualizar o status no release.json: {e}")
+EOF
+    fi
+}
+
+# ------------------------------------------------------------------------------
+# HELPER: DESCOBERTA DA ÚLTIMA RELEASE "SUCCESS" (Ordenação Alfanumérica)
+# ------------------------------------------------------------------------------
+find_last_successful_release() {
+    local active_rel
+    active_rel=$(readlink -f "${CURRENT_LINK}" 2>/dev/null || echo "")
+
+    find "${RELEASES_DIR}" -mindepth 1 -maxdepth 1 -type d 2>/dev/null \
+        | sort -r \
+        | while read -r dir; do
+            if [ "${dir}" = "${active_rel}" ]; then
+                continue
+            fi
+
+            local json_path="${dir}/release.json"
+            if [ -f "${json_path}" ] && grep -q '"status": "SUCCESS"' "${json_path}" 2>/dev/null; then
+                echo "${dir}"
+                return 0
+            fi
+        done
+}
+
+# ------------------------------------------------------------------------------
+# TRAP DE LIMPEZA COM DUMP DE LOGS TIMESTAMPEADOS E INSPECT COMPLETO
+# ------------------------------------------------------------------------------
+cleanup_on_failure() {
+    local exit_code=$?
+    if [ $exit_code -ne 0 ] && [ "${ACTION}" = "deploy" ] && [ -d "${NEW_RELEASE_DIR}" ]; then
+        echo "🚨 FALHA DETECTADA (Código ${exit_code}). Interrompendo e executando limpeza..."
+
+        update_json_status "${NEW_RELEASE_DIR}/release.json" "FAILED"
+
+        local compose_file="${NEW_RELEASE_DIR}/${COMPOSE_FILE}"
+        if [ -f "${compose_file}" ]; then
+            echo "💾 Dumping logs com timestamps de todos os serviços..."
+            docker compose --env-file "${SHARED_DIR}/.env" -f "${compose_file}" logs --timestamps --tail=200 > "${NEW_RELEASE_DIR}/failed-stack-app.log" 2>&1 || true
+            docker compose --env-file "${SHARED_DIR}/.env" -f "${compose_file}" down --remove-orphans 2>/dev/null || true
+        fi
+
+        if [ "$(readlink -f "${CURRENT_LINK}" 2>/dev/null)" = "${NEW_RELEASE_DIR}" ]; then
+            echo "⚠️ Revertendo symlink para a última release estável..."
+            LAST_GOOD=$(find_last_successful_release)
+            if [ -n "${LAST_GOOD}" ]; then
+                ln -sfn "${LAST_GOOD}" "${CURRENT_LINK}"
+            fi
+        fi
+
+        echo "🧹 Removendo pasta da release abortada: ${NEW_RELEASE_DIR}"
+        rm -rf "${NEW_RELEASE_DIR}"
+    fi
+    exit $exit_code
+}
+trap cleanup_on_failure EXIT INT TERM ERR
+
+# ------------------------------------------------------------------------------
+# FUNÇÃO REUTILIZÁVEL: HealthCheck (Running + Health + OOM + HTTP)
+# ------------------------------------------------------------------------------
+run_healthcheck() {
+    local target_dir="$1"
+    local compose_file="${target_dir}/${COMPOSE_FILE}"
+
+    echo "⏳ Identificando ID do container da aplicação..."
+    APP_CID=$(docker compose --env-file "${SHARED_DIR}/.env" -f "${compose_file}" ps -q app 2>/dev/null || true)
+
+    if [ -z "${APP_CID}" ]; then
+        echo "❌ ERRO CRÍTICO: Container 'app' não localizado."
+        return 1
+    fi
+
+    echo "⏳ Verificando integridade e estado operacional do container [${APP_CID:0:12}]..."
+    local MAX_WAIT=120
+    local WAIT=0
+    local HEALTHY=false
+
+    while [ "$WAIT" -lt "$MAX_WAIT" ]; do
+        # 1. Validação do Estado Básico do Container
+        STATE_STATUS=$(docker inspect --format='{{.State.Status}}' "${APP_CID}" 2>/dev/null || echo "exited")
+        if [ "${STATE_STATUS}" != "running" ]; then
+            echo "❌ ERRO CRÍTICO: Container não está rodando (Estado atual: '${STATE_STATUS}')."
+            docker compose --env-file "${SHARED_DIR}/.env" -f "${compose_file}" ps -q | xargs docker inspect > "${target_dir}/failed-stack-inspect.json" 2>&1 || true
+            return 1
+        fi
+
+        # 2. Validação de OOMKilled
+        OOM_KILLED=$(docker inspect --format='{{.State.OOMKilled}}' "${APP_CID}" 2>/dev/null || echo "false")
+        if [ "${OOM_KILLED}" = "true" ]; then
+            echo "❌ ERRO FATAL: Container foi finalizado por falta de memória (OOMKilled)."
+            docker compose --env-file "${SHARED_DIR}/.env" -f "${compose_file}" ps -q | xargs docker inspect > "${target_dir}/failed-stack-inspect.json" 2>&1 || true
+            return 1
+        fi
+
+        # 3. Validação do Healthcheck Nativo do Docker
+        HEALTH_STATUS=$(docker inspect --format='{{if .State.Health}}{{.State.Health.Status}}{{else}}no-healthcheck{{end}}' "${APP_CID}" 2>/dev/null || echo "unknown")
+
+        case "$HEALTH_STATUS" in
+            healthy)
+                echo "✅ Container [${APP_CID:0:12}] está rodando e saudável (healthy)!"
+                HEALTHY=true
+                break
+                ;;
+            unhealthy)
+                echo "❌ ERRO CRÍTICO: Container atingiu o estado UNHEALTHY!"
+                docker compose --env-file "${SHARED_DIR}/.env" -f "${compose_file}" ps -q | xargs docker inspect > "${target_dir}/failed-stack-inspect.json" 2>&1 || true
+                return 1
+                ;;
+            *)
+                echo "  -> Status: running | Health: [${HEALTH_STATUS}]. Aguardando... (${WAIT}s/${MAX_WAIT}s)"
+                ;;
+        esac
+
+        sleep 2
+        WAIT=$((WAIT+2))
+    done
+
+    if [ "$HEALTHY" = false ]; then
+        echo "❌ TIMEOUT: Container não atingiu o estado saudável no tempo limite."
+        docker compose --env-file "${SHARED_DIR}/.env" -f "${compose_file}" ps -q | xargs docker inspect > "${target_dir}/failed-stack-inspect.json" 2>&1 || true
+        return 1
+    fi
+
+    # 4. Checagem HTTP na rota /up com Retry
+    HOST_PORT=$(docker compose --env-file "${SHARED_DIR}/.env" -f "${compose_file}" port nginx 80 2>/dev/null | cut -d: -f2 || true)
+    if [ -n "${HOST_PORT}" ]; then
+        echo "🔍 Validando resposta HTTP em http://localhost:${HOST_PORT}/up..."
+        if curl --silent --fail --retry 3 --retry-delay 1 --max-time 5 "http://localhost:${HOST_PORT}/up" > /dev/null; then
+            echo "🎉 Endpoint /up respondeu HTTP 200 OK!"
+        else
+            echo "⚠️ AVISO: A rota /up não retornou status 200 OK."
+        fi
+    fi
+
+    return 0
+}
+
+# ------------------------------------------------------------------------------
+# RECURSO: ROLLBACK COM EXTRAÇÃO ROBUSTA DA IMAGE_TAG VIA PYTHON
+# ------------------------------------------------------------------------------
+if [ "${ACTION}" = "rollback" ]; then
+    echo "⏪ Iniciando processo de Rollback no ambiente: [${ENVIRONMENT}]..."
+
+    ACTIVE_RELEASE=$(readlink -f "${CURRENT_LINK}" 2>/dev/null || echo "")
+    TARGET_ROLLBACK_DIR=$(find_last_successful_release)
+
+    if [ -z "${TARGET_ROLLBACK_DIR}" ] || [ ! -d "${TARGET_ROLLBACK_DIR}" ]; then
+        echo "❌ ERRO FATAL: Nenhuma release anterior com status 'SUCCESS' foi encontrada."
+        exit 1
+    fi
+
+    echo "🎯 Release destino selecionada: $(basename "${TARGET_ROLLBACK_DIR}")"
+    TARGET_COMPOSE="${TARGET_ROLLBACK_DIR}/${COMPOSE_FILE}"
+
+    # Extração robusta do image_tag do release.json usando Python
+    ROLLBACK_IMAGE_TAG=""
+    if [ -f "${TARGET_ROLLBACK_DIR}/release.json" ] && command -v python3 >/dev/null 2>&1; then
+        ROLLBACK_IMAGE_TAG=$(python3 -c "import json; print(json.load(open('${TARGET_ROLLBACK_DIR}/release.json')).get('image_tag', ''))" 2>/dev/null || echo "")
+    fi
+
+    if [ -n "${ROLLBACK_IMAGE_TAG}" ]; then
+        echo "📌 Replicando IMAGE_TAG da release de origem: ${ROLLBACK_IMAGE_TAG}"
+        export IMAGE_TAG="${ROLLBACK_IMAGE_TAG}"
+    fi
+
+    if [ -d "${ACTIVE_RELEASE}" ]; then
+        echo "🛑 Desligando serviços da release com falhas..."
+        ACTIVE_COMPOSE="${ACTIVE_RELEASE}/${COMPOSE_FILE}"
+        if [ -f "${ACTIVE_COMPOSE}" ]; then
+            docker compose --env-file "${SHARED_DIR}/.env" -f "${ACTIVE_COMPOSE}" down --remove-orphans 2>/dev/null || true
+        fi
+    fi
+
+    echo "🔗 Alterando symlink 'current'..."
+    ln -sfn "${TARGET_ROLLBACK_DIR}" "${CURRENT_LINK}"
+
+    echo "🚀 Subindo containers da release restaurada..."
+    docker compose --env-file "${SHARED_DIR}/.env" -f "${TARGET_COMPOSE}" up -d --wait --wait-timeout 120 --remove-orphans
+
+    echo "🔍 Validando saúde do ambiente pós-rollback..."
+    if run_healthcheck "${TARGET_ROLLBACK_DIR}"; then
+        echo "✨ Rollback concluído com sucesso para: $(basename "${TARGET_ROLLBACK_DIR}")!"
+        exit 0
+    else
+        echo "❌ ERRO CRÍTICO: A release de rollback falhou na verificação de saúde!"
+        exit 1
+    fi
 fi
 
-SHARED_PATH="${TARGET_ROOT}/shared"
-RELEASES_PATH="${TARGET_ROOT}/releases"
-CURRENT_LINK="${TARGET_ROOT}/current"
+# ------------------------------------------------------------------------------
+# FLUXO DE DEPLOY
+# ------------------------------------------------------------------------------
+echo "🚀 Iniciando deploy no ambiente: [${ENVIRONMENT}] (${PROJECT_NAME}) - Release: ${RELEASE_TAG}"
 
-# ⚠️ Exporta variáveis para o Docker Compose ler
-export CURRENT_LINK DOCKER_NETWORK VOLUME_PGSQL VOLUME_REDIS
-
-echo -e "${BLUE}====================================================${NC}"
-echo -e "${BLUE} 🚀 INICIANDO DEPLOY - AMBIENTE: ${ENV_LABEL^^} ${NC}"
-echo -e "${BLUE}====================================================${NC}"
-echo "📂 Target Root:   $TARGET_ROOT"
-echo "🐳 Compose File:  $DOCKER_COMPOSE"
-echo "📦 Project Name:  $PROJECT_NAME"
-echo ""
-
-# ------------------------------------------------------------
-# 1. ESTRUTURA DE DIRETÓRIOS E ENV
-# ------------------------------------------------------------
-echo "📁 Preparando diretórios compartilhados..."
-sudo mkdir -p "${RELEASES_PATH}"
-sudo mkdir -p "${SHARED_PATH}/storage"/{app/public,framework/{cache/data,sessions,views},logs}
-
-# Cria o .env compartilhado APENAS na primeira execução (se não existir)
-if [ ! -f "${SHARED_PATH}/.env" ]; then
-  echo "⚙️ Criando arquivo .env compartilhado inicial..."
-  if [ "$ENV_LABEL" = "prod" ] && [ -f "${PROJECT_ROOT}/.env.prod" ]; then
-    sudo cp "${PROJECT_ROOT}/.env.prod" "${SHARED_PATH}/.env"
-  elif [ -f "${PROJECT_ROOT}/.env.${ENV_LABEL}" ]; then
-    sudo cp "${PROJECT_ROOT}/.env.${ENV_LABEL}" "${SHARED_PATH}/.env"
-  elif [ -f "${PROJECT_ROOT}/.env.example" ]; then
-    sudo cp "${PROJECT_ROOT}/.env.example" "${SHARED_PATH}/.env"
-  else
-    echo "APP_NAME=Blink" | sudo tee "${SHARED_PATH}/.env" > /dev/null
-  fi
+# 1. Validação de Alterações Pendentes no Git Local
+if command -v git >/dev/null 2>&1 && git rev-parse --is-inside-work-tree >/dev/null 2>&1; then
+    if ! git diff --quiet HEAD 2>/dev/null; then
+        echo "❌ ABORTANDO: Existem alterações não commitadas no repositório local. Faça commit ou stash antes de implantar."
+        exit 1
+    fi
 fi
 
-# Corrige o proprietário de toda a estrutura para o seu usuário de deploy
-echo "🔑 Ajustando proprietários e permissões em ${TARGET_ROOT}..."
-sudo chown -R $USER:www-data "${TARGET_ROOT}"
+mkdir -p "${RELEASES_DIR}"
+mkdir -p "${SHARED_DIR}"
 
-# Ajusta permissões nos arquivos e pastas compartilhados
-chmod -R 775 "${SHARED_PATH}"
-chmod 664 "${SHARED_PATH}/.env"
-
-# ------------------------------------------------------------
-# 2. DEFINIÇÃO DA RELEASE & CÓPIA DO CÓDIGO-FONTE
-# ------------------------------------------------------------
-NOW_DATE="$(date +%Y-%m-%d_%H-%M)"
-
-# Calcula a sequência da release (ex: 001, 002...)
-LAST_SEQ=$(ls -1 "${RELEASES_PATH}" 2>/dev/null | grep -oE '[0-9]+$' | sort -n | tail -n 1 || true)
-if [ -z "$LAST_SEQ" ]; then
-  NEXT_SEQ=1
-else
-  NEXT_SEQ=$((10#$LAST_SEQ + 1))
+# 2. Validação Prévia de Espaço em Disco
+FREE_DISK_MB=$(df -Pm "${BASE_DIR}" 2>/dev/null | awk 'NR==2 {print $4}' || echo "0")
+if [ "${FREE_DISK_MB}" -lt 1024 ]; then
+    echo "❌ ABORTANDO: Espaço em disco insuficiente em ${BASE_DIR} (${FREE_DISK_MB} MB livres, mínimo: 1024 MB)."
+    exit 1
 fi
 
-SEQ_FORMATTED=$(printf "%03d" $NEXT_SEQ)
-RELEASE_NAME="${NOW_DATE}-${SEQ_FORMATTED}"
-NEW_RELEASE="${RELEASES_PATH}/${RELEASE_NAME}"
-
-echo "📦 Criando Release #${NEXT_SEQ}: ${RELEASE_NAME}"
-mkdir -p "${NEW_RELEASE}"
-
-echo "📋 Copiando código-fonte para a release..."
-rsync -av \
-  --exclude '.git' \
-  --exclude 'node_modules' \
-  --exclude 'vendor' \
-  --exclude '.github' \
-  --exclude 'tests' \
-  --exclude '.env*' \
-  --exclude 'storage' \
-  --exclude 'scripts' \
-  "${PROJECT_ROOT}/" "${NEW_RELEASE}/"
-
-cd "${NEW_RELEASE}"
-
-# ------------------------------------------------------------
-# 3. SYMLINKS E PERMISSÕES NA NOVA RELEASE
-# ------------------------------------------------------------
-echo "🔗 Criando symlinks para a pasta shared..."
-mkdir -p "${NEW_RELEASE}/public"
-
-if [ -d "${NEW_RELEASE}/storage/app/public" ]; then
-  cp -R "${NEW_RELEASE}/storage/app/public/." "${SHARED_PATH}/storage/app/public/" 2>/dev/null || true
+# 3. Validação Estrita do .env
+if [ ! -f "${SHARED_DIR}/.env" ]; then
+    echo "❌ ABORTANDO: Arquivo de ambiente '${SHARED_DIR}/.env' ausente."
+    exit 1
 fi
 
-rm -rf "${NEW_RELEASE}/storage" "${NEW_RELEASE}/public/storage" "${NEW_RELEASE}/.env"
-ln -sfn "${SHARED_PATH}/storage" "${NEW_RELEASE}/storage"
-ln -sfn "${SHARED_PATH}/storage/app/public" "${NEW_RELEASE}/public/storage"
-ln -sfn "${SHARED_PATH}/.env" "${NEW_RELEASE}/.env"
-
-chmod -R 775 "${NEW_RELEASE}/bootstrap/cache" 2>/dev/null || true
-
-# 🛡️ TRAVA DE SEGURANÇA DOCKER: Garante que o symlink 'current' exista antes do Compose subir
-if [ ! -L "${CURRENT_LINK}" ] && [ ! -d "${CURRENT_LINK}" ]; then
-  echo "🔗 Criando symlink 'current' inicial..."
-  ln -sfn "${NEW_RELEASE}" "${CURRENT_LINK}"
-fi
-
-# ------------------------------------------------------------
-# 4. DEPENDÊNCIAS (COMPOSER & NPM)
-# ------------------------------------------------------------
-echo "📚 Instalando dependências na nova release..."
-if [ -f "composer.json" ]; then
-  composer install --no-dev --optimize-autoloader --no-interaction
-fi
-
-if [ -f "package.json" ]; then
-  NODE_ENV=development npm install --include=dev --legacy-peer-deps
-  npm run build
-fi
-
-# ------------------------------------------------------------
-# 5. ATUALIZAÇÃO ATÔMICA & DOCKER
-# ------------------------------------------------------------
-echo "🐳 Garantindo infraestrutura Docker..."
-docker volume create "${VOLUME_PGSQL}" 2>/dev/null || true
-docker volume create "${VOLUME_REDIS}" 2>/dev/null || true
-
-# Aponta o symlink 'current' para a nova release
-echo "🔄 Atualizando symlink 'current' para a nova release..."
-ln -sfn "${NEW_RELEASE}" "${CURRENT_LINK}"
-
-docker compose -f "${CURRENT_LINK}/${DOCKER_COMPOSE}" -p "${PROJECT_NAME}" --env-file "${SHARED_PATH}/.env" up -d --build --remove-orphans
-
-echo "⏳ Aguardando o container 'app' estabilizar..."
-MAX_RETRIES=15
-RETRY_COUNT=0
-UNTIL_RUNNING=false
-
-while [ $RETRY_COUNT -lt $MAX_RETRIES ]; do
-  CONTAINER_STATUS=$(docker inspect --format='{{.State.Status}}' "${PROJECT_NAME}-app" 2>/dev/null || echo "not_found")
-  if [ "$CONTAINER_STATUS" = "running" ]; then
-    UNTIL_RUNNING=true
-    break
-  fi
-  echo "  - Status atual do app: '$CONTAINER_STATUS'. Aguardando..."
-  sleep 2
-  RETRY_COUNT=$((RETRY_COUNT + 1))
+REQUIRED_KEYS=("APP_KEY" "DB_PASSWORD" "REDIS_PASSWORD")
+for key in "${REQUIRED_KEYS[@]}"; do
+    VAL=$(awk -F '=' -v k="$key" '$1 ~ "^[[:space:]]*"k"[[:space:]]*$" {gsub(/^[[:space:]]*["\']?|["\']?[[:space:]]*$/, "", $2); print $2}' "${SHARED_DIR}/.env")
+    if [ -z "${VAL}" ]; then
+        echo "❌ ERRO DE CONFIGURAÇÃO: A variável '${key}' não está preenchida em '${SHARED_DIR}/.env'."
+        exit 1
+    fi
 done
 
-if [ "$UNTIL_RUNNING" = false ]; then
-  echo -e "${RED}❌ O container 'app' não estabilizou (Status: $CONTAINER_STATUS). Verifique com 'docker logs ${PROJECT_NAME}-app'${NC}"
-  exit 1
+# 4. Sincronização dos Arquivos para a Nova Release
+echo "📋 Sincronizando arquivos do projeto para a release [${RELEASE_TAG}]..."
+mkdir -p "${NEW_RELEASE_DIR}"
+
+rsync -a --delete \
+         --exclude='.git' \
+         --exclude='.github' \
+         --exclude='.idea' \
+         --exclude='.vscode' \
+         --exclude='tests' \
+         --exclude='docker-compose*.override.yml' \
+         --exclude='node_modules' \
+         --exclude='vendor' \
+         --exclude='storage' \
+         --exclude='.env' \
+         ./ "${NEW_RELEASE_DIR}/"
+
+NEW_COMPOSE_PATH="${NEW_RELEASE_DIR}/${COMPOSE_FILE}"
+
+if [ ! -f "${NEW_COMPOSE_PATH}" ]; then
+    echo "❌ ERRO: Arquivo '${COMPOSE_FILE}' não existe na nova release."
+    exit 1
 fi
 
-# ------------------------------------------------------------
-# 5.1 PERMISSÕES E ESTRUTURA INTERNA (Executa ANTES do Artisan)
-# ------------------------------------------------------------
-echo "🔑 Ajustando estrutura de diretórios e permissões do Laravel..."
-
-# 1. Cria todas as subpastas do framework no host e garante permissão 777 no shared e no current
-sudo mkdir -p "${SHARED_PATH}/storage"/{app/public,framework/{cache/data,sessions,views},logs}
-sudo chmod -R 777 "${SHARED_PATH}/storage"
-sudo chmod -R 777 "${CURRENT_LINK}/bootstrap/cache"
-
-# 2. Garante a criação e permissão internamente no container (sem usar -it)
-docker compose -f "${CURRENT_LINK}/${DOCKER_COMPOSE}" -p "${PROJECT_NAME}" --env-file "${SHARED_PATH}/.env" exec -T app mkdir -p storage/framework/views storage/framework/cache/data storage/framework/sessions storage/logs
-docker compose -f "${CURRENT_LINK}/${DOCKER_COMPOSE}" -p "${PROJECT_NAME}" --env-file "${SHARED_PATH}/.env" exec -T app chmod -R 777 storage bootstrap/cache
-
-# ------------------------------------------------------------
-# 6. MIGRATIONS & OTIMIZAÇÕES ARTISAN
-# ------------------------------------------------------------
-echo "⚡ Executando rotinas finais do Laravel..."
-
-# 1º PRIMEIRO: Executa as migrations para criar as tabelas do banco (incluindo a tabela 'cache')
-docker compose -f "${CURRENT_LINK}/${DOCKER_COMPOSE}" -p "${PROJECT_NAME}" --env-file "${SHARED_PATH}/.env" exec -T app php artisan migrate --force
-
-# 2º SEGUNDO: Se for ambiente de homologação, executa as seeds
-if [ "$ENV_LABEL" = "hom" ]; then
-  docker compose -f "${CURRENT_LINK}/${DOCKER_COMPOSE}" -p "${PROJECT_NAME}" --env-file "${SHARED_PATH}/.env" exec -T app php artisan db:seed --force || true
+# 5. Validação Prévia da Sintaxe do Compose
+echo "🔍 Validando configuração do Docker Compose..."
+if ! docker compose --env-file "${SHARED_DIR}/.env" -f "${NEW_COMPOSE_PATH}" config -q; then
+    echo "❌ ERRO DE SINTAXE: O arquivo '${COMPOSE_FILE}' possui configurações inválidas."
+    exit 1
 fi
 
-# 3º TERCEIRO: Agora que o banco está pronto, limpa e gera as otimizações de cache
-docker compose -f "${CURRENT_LINK}/${DOCKER_COMPOSE}" -p "${PROJECT_NAME}" --env-file "${SHARED_PATH}/.env" exec -T app php artisan optimize:clear
-docker compose -f "${CURRENT_LINK}/${DOCKER_COMPOSE}" -p "${PROJECT_NAME}" --env-file "${SHARED_PATH}/.env" exec -T app php artisan optimize
+# 6. Cálculo do SHA256 Checksum Relativo da Release
+echo "🔏 Gerando checksum relativo de integridade..."
+RELEASE_CHECKSUM=$(cd "${NEW_RELEASE_DIR}" && find . -type f ! -name "release.json" -exec sha256sum {} + | sort | sha256sum | awk '{print $1}')
 
-# ------------------------------------------------------------
-# 7. ROTATIVIDADE (Manter últimas 5 releases)
-# ------------------------------------------------------------
-echo "🧹 Limpando releases antigas (mantendo as 5 mais recentes)..."
-cd "${RELEASES_PATH}"
-ls -1dt */ 2>/dev/null | tail -n +6 | xargs -I {} rm -rf "{}" 2>/dev/null || true
+# 7. Geração do release.json Completo
+cat <<EOF > "${NEW_RELEASE_DIR}/release.json"
+{
+  "release": "${RELEASE_TAG}",
+  "status": "PENDING",
+  "image_tag": "${IMAGE_TAG}",
+  "git_commit": "${GIT_COMMIT}",
+  "branch": "${GIT_BRANCH}",
+  "author": "${GIT_AUTHOR}",
+  "git_remote": "${GIT_REMOTE}",
+  "environment": "${ENVIRONMENT}",
+  "docker_image": "${PROJECT_NAME}-app:${IMAGE_TAG}",
+  "docker_version": "${DOCKER_VER}",
+  "kernel_version": "${KERNEL_VER}",
+  "hostname": "$(hostname)",
+  "user": "$(whoami)",
+  "release_checksum": "${RELEASE_CHECKSUM}",
+  "ci_build_id": "${GITHUB_RUN_ID:-${GITLAB_CI_JOB_ID:-none}}",
+  "build_at": "$(date -u +"%Y-%m-%dT%H:%M:%SZ")"
+}
+EOF
 
-# ------------------------------------------------------------
-# 8. HEALTH CHECK
-# ------------------------------------------------------------
-DETECTED_PORT=$(docker compose -f "${CURRENT_LINK}/${DOCKER_COMPOSE}" -p "${PROJECT_NAME}" port nginx 80 2>/dev/null | awk -F':' '{print $NF}' || true)
-if [ -z "$DETECTED_PORT" ]; then
-  DETECTED_PORT=$(docker compose -f "${CURRENT_LINK}/${DOCKER_COMPOSE}" -p "${PROJECT_NAME}" port web 80 2>/dev/null | awk -F':' '{print $NF}' || true)
+# ------------------------------------------------------------------------------
+# 8. Execução do Docker Compose
+# ------------------------------------------------------------------------------
+cd "${NEW_RELEASE_DIR}"
+
+COMPOSE_EXEC=(docker compose --env-file "${SHARED_DIR}/.env" -f "${NEW_COMPOSE_PATH}")
+
+if [ "${ENVIRONMENT}" = "prod" ]; then
+    echo "🐳 [PROD] Baixando imagem remota (pull --quiet)..."
+    "${COMPOSE_EXEC[@]}" pull --quiet
+    echo "🚀 [PROD] Subindo containers..."
+    "${COMPOSE_EXEC[@]}" up -d --wait --wait-timeout 120 --remove-orphans
+else
+    echo "🛠️ [HOM] Compilando e subindo imagem..."
+    "${COMPOSE_EXEC[@]}" up -d --build --wait --wait-timeout 120 --remove-orphans
 fi
-APP_PORT=${DETECTED_PORT:-80}
 
-echo "🩺 Verificando resposta da aplicação na porta ${APP_PORT}..."
-SUCCESS=false
-for i in {1..5}; do
-  HTTP_STATUS=$(curl -s -o /dev/null -w "%{http_code}" "http://localhost:${APP_PORT}/" || true)
-  if [[ "$HTTP_STATUS" =~ ^(200|301|302|401)$ ]]; then
-    echo -e "${GREEN}✅ Aplicação respondendo! (HTTP $HTTP_STATUS)${NC}"
-    SUCCESS=true
-    break
-  fi
-  sleep 2
-done
-
-if [ "$SUCCESS" = false ]; then
-  echo -e "${RED}❌ Health check falhou na porta ${APP_PORT}${NC}"
-  exit 1
+# Captura do Image ID Hash para auditoria
+IMAGE_ID_HASH=$(docker inspect --format='{{.Image}}' "${PROJECT_NAME}-app:${IMAGE_TAG}" 2>/dev/null || echo "unknown")
+if [ -f "${NEW_RELEASE_DIR}/release.json" ] && command -v python3 >/dev/null 2>&1; then
+    python3 - "${NEW_RELEASE_DIR}/release.json" "${IMAGE_ID_HASH}" << 'EOF' || true
+import json, sys
+try:
+    json_file, img_hash = sys.argv[1], sys.argv[2]
+    with open(json_file, 'r') as f:
+        data = json.load(f)
+    data['image_id'] = img_hash
+    with open(json_file, 'w') as f:
+        json.dump(data, f, indent=2)
+except Exception:
+    pass
+EOF
 fi
 
-echo -e "${GREEN}🎉 DEPLOY CONCLUÍDO COM SUCESSO! Release: ${RELEASE_NAME}${NC}"
+# ------------------------------------------------------------------------------
+# 9. Validação de Saúde (HealthCheck & /up)
+# ------------------------------------------------------------------------------
+run_healthcheck "${NEW_RELEASE_DIR}"
+
+# ------------------------------------------------------------------------------
+# 10. Atualização Atômica do Symlink e Aprovação do Status
+# ------------------------------------------------------------------------------
+echo "🔗 Validação concluída! Atualizando symlink 'current'..."
+ln -sfn "${NEW_RELEASE_DIR}" "${CURRENT_LINK}"
+
+update_json_status "${NEW_RELEASE_DIR}/release.json" "SUCCESS"
+
+# ------------------------------------------------------------------------------
+# 11. Limpeza Segura de Releases Antigas
+# ------------------------------------------------------------------------------
+echo "🧹 Limpando releases antigas..."
+if [ -d "${RELEASES_DIR}" ]; then
+    ACTIVE_RELEASE=$(readlink -f "${CURRENT_LINK}")
+    PROTECTED_SUCCESS_RELEASE=$(find_last_successful_release || echo "")
+
+    find "${RELEASES_DIR}" -mindepth 1 -maxdepth 1 -type d | sort -r | tail -n +6 | while read -r old_release; do
+        if [ "$(readlink -f "${old_release}")" != "${ACTIVE_RELEASE}" ] && [ "${old_release}" != "${PROTECTED_SUCCESS_RELEASE}" ]; then
+            echo "  -> Removendo release antiga: ${old_release}"
+            rm -rf "${old_release}"
+        else
+            echo "  -> Preservando release em uso/rollback: ${old_release}"
+        fi
+    done
+fi
+
+echo "✨ Deploy da release [${RELEASE_TAG}] concluído com sucesso!"

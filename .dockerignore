@@ -1,7 +1,7 @@
 .git
 .github
 node_modules
-vendor
+#vendor nao pode retirar ela
 .env
 .env.*
 *.md
